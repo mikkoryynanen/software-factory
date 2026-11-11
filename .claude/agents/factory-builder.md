@@ -1,5 +1,5 @@
 ---
-name: builder
+name: factory-builder
 description: Implements a spec on a factory feature branch, tests it, and addresses reviewer feedback when resumed. One builder per job.
 tools: Read, Grep, Glob, Bash, Write, Edit
 model: opus

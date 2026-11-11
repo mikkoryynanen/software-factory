@@ -1,5 +1,5 @@
 ---
-name: review-ux
+name: factory-review-ux
 description: UX and UI reviewer for a factory job. Checks the flow against the spec and visual consistency with the project's design system, and writes review-ux.md with a verdict.
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet

@@ -1,5 +1,5 @@
 ---
-name: approver
+name: factory-approver
 description: Final gate for a factory job after the chosen reviews pass. Decides APPROVE (merge) or ESCALATE (needs a human) and writes decision.md.
 tools: Read, Grep, Glob, Bash, Write
 model: opus

@@ -1,5 +1,5 @@
 ---
-name: review-security
+name: factory-review-security
 description: Security reviewer for a factory job. Reviews the branch diff and writes review-security.md with a verdict.
 tools: Read, Grep, Glob, Bash, Write
 model: opus

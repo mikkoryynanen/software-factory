@@ -1,5 +1,5 @@
 ---
-name: review-code
+name: factory-review-code
 description: Code reviewer for a factory job. Checks correctness, conventions and tests, runs the test suite, and writes review-code.md with a verdict.
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet
