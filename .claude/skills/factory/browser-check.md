@@ -2,7 +2,7 @@
 
 Use `playwright-cli` (token-efficient; no MCP schemas). If `playwright-cli` is not on PATH, say so in your file and list the browser checks as not verified. Never claim a check you did not run, and do not install anything yourself.
 
-How to serve this app, sign in, and what to watch for are in the "App in the browser" section of `factory/project.md`. Viewports are in its "UX checklist". The orchestrator copies the main checkout's env files into each worktree; never create, edit or read them. If the app fails for missing env values, say so and list the browser checks as not verified.
+How to serve this app, sign in, and what to watch for are in the "App in the browser" section of `<factory>/project.md`. Viewports are in its "UX checklist". The orchestrator copies the main checkout's env files into each worktree; never create, edit or read them. If the app fails for missing env values, say so and list the browser checks as not verified.
 
 The app is real DOM: use `snapshot` refs, not coordinates.
 
