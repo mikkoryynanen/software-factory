@@ -10,8 +10,10 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
 
 ```
                    ┌──────────────────┐
-                   │    idea chat     │
-                   │ orchestrator+you │
+                   │   orchestrator   │
+                   │    (idea chat)   │
+                   │  asks you if the │
+                   │ task is unclear  │
                    └─────────┬────────┘
                              ▼ you say go
                    ┌──────────────────┐
