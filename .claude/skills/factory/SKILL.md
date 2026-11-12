@@ -79,12 +79,15 @@ For a repo that has the agents and this skill but no `FACTORY/project.md`.
 1. If `FACTORY/project.md` exists, show it, ask whether to revise it, and stop.
 2. Survey the repo, reading only what each section needs: `CLAUDE.md`, `AGENTS.md`, `README`; the dependency manifests and lock files (they name the package manager); CI workflows (the real check commands); test config and where tests live; schema or migration folders; UI folders, design tokens and shared components; deploy config; `git remote -v` and the default branch (`git symbolic-ref --short refs/remotes/origin/HEAD`, else the current branch). Env files: list their names only, never read them.
 3. Draft `FACTORY/project.md` from `~/.claude/skills/factory/project-template.md`: fill every section, write "none" where it does not apply, mark anything inferred but unconfirmed with "(check)". Ask the user only what the repo cannot tell you: usually the primary user, the product stance, and whether a push to MAIN deploys.
-4. Check the tools the draft names: `git`, each check command's tool (`--version`), and `playwright-cli` if the app has a UI. Report any that are missing.
+4. Toolchain. Make sure the draft's "Toolchain" section lists `git`, every tool the Checks and App sections use, and `playwright-cli` if the app has a UI. Run the Preflight (below) with starting allowed. Report each tool as ok, started, or missing. For a missing tool, give the install command and ask before running it.
 5. Show the draft. After the user accepts it:
    - write `FACTORY/project.md`;
    - create `FACTORY/board.json` as `{ "jobs": [] }` and `FACTORY/backlog.md` (`# Backlog`, a blank line, "Run the first unchecked item with `/factory next`.") if they are missing;
    - leave the repo untouched: no `.gitignore` or `CLAUDE.md` edits.
 6. Show what was written under `FACTORY` and suggest a dry run: `/factory --hold <a tiny feature>`.
+
+## Preflight
+Read "Toolchain" in `FACTORY/project.md`. Run each tool's check command. If one fails and it has a start command, run it, then poll the check every 5 seconds for up to 90 seconds. A local database service (for example `supabase start`) is started only after its dependency (Docker) is up. Never install anything and never touch env files. Result per tool: ok, started, or missing (with the reason). If "Toolchain" is missing, derive the list from "Checks" and say that you did.
 
 ## Refine
 Stage `idea`. You talk with the user directly; no agent. The idea comes from the command or the backlog item.
@@ -116,9 +119,10 @@ Only for DRAFT.
 1. Id: next free number (3 digits) + kebab slug of at most 4 words, e.g. `004-bulk-paste`. Make `JOB`. Add the board entry: stage `idea`, round 0, maxRound 2, hold true/false, reviews all `pending`, past `[]`.
 2. **Idea.** Run Refine (below). Continue only after the user has agreed to the scope and `JOB/idea.md` says `DECISION: ACCEPT`. Board: stage `spec`.
 3. **Spec.** Spawn `factory-spec-writer` with `JOB/idea.md` and output `JOB/spec.md`. Check the file exists and has an acceptance criteria section; if not, respawn once, then stop and tell the user.
-4. **Worktree.** From `ROOT` (must be on MAIN): `git worktree add TREE -b factory/<job-id> MAIN`, then copy every env file from the main checkout into the same place in the worktree: `cd ROOT && find . -name '.env*' -not -path './.git/*' -not -path '*/node_modules/*' -exec rsync -R {} TREE/ \;` (copy only; never read, print or edit them; they are git-ignored). If none is found and the app needs one, tell the user that browser checks may not work. Stage `build`.
-5. **Build.** Load SendMessage first: `ToolSearch("select:SendMessage")`. Spawn `factory-builder` named `builder-<job-id>` (use the Agent tool's name option if it has one) with: `JOB`, `TREE`, branch, "write `JOB/build.md`". Store the name, or the agent id the result returns, in `builder`. Wait for it. Check `build.md` exists and the branch has commits (`git -C TREE log MAIN..HEAD --oneline`).
-6. **Review round** (below), starting at round 1.
+4. **Preflight.** Run the Preflight (below) with starting allowed. If a tool is still missing, tell the user which checks it blocks and ask: continue without it or stop. If they continue, put the list in the builder's prompt as "Unavailable: <tools>; do not attempt those checks, list them under Not verified", and in the board `note`. Stage stays `spec`.
+5. **Worktree.** From `ROOT` (must be on MAIN): `git worktree add TREE -b factory/<job-id> MAIN`, then copy every env file from the main checkout into the same place in the worktree: `cd ROOT && find . -name '.env*' -not -path './.git/*' -not -path '*/node_modules/*' -exec rsync -R {} TREE/ \;` (copy only; never read, print or edit them; they are git-ignored). If none is found and the app needs one, tell the user that browser checks may not work. Stage `build`.
+6. **Build.** Load SendMessage first: `ToolSearch("select:SendMessage")`. Spawn `factory-builder` named `builder-<job-id>` (use the Agent tool's name option if it has one) with: `JOB`, `TREE`, branch, "write `JOB/build.md`". Store the name, or the agent id the result returns, in `builder`. Wait for it. Check `build.md` exists and the branch has commits (`git -C TREE log MAIN..HEAD --oneline`).
+7. **Review round** (below), starting at round 1.
 
 ## Review round n
 1. `mkdir JOB/round-n`. Board: stage `review`, round n, reviews all `pending`.

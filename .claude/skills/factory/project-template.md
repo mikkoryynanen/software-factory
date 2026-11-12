@@ -11,6 +11,9 @@ Main branch name. Whether to push after a merge, and the exact command (normally
 ## Checks
 Working directory for commands. Install command for a fresh worktree. Typecheck, lint, unit test and build commands. Where unit tests live and their file pattern. Database or integration tests: the command, what they need, and when to run them.
 
+## Toolchain
+One line per tool the Checks and App sections need: `name | check command | start command | needed for`. The start command only for services that can be started (Docker, a local database); "none" for plain tools. Example: `docker | docker info | open -a Docker | database tests`, `java | java -version | none | gradle build`.
+
 ## Conventions
 Rules the code reviewer checks beyond "match the surrounding code": data rules, framework rules, required tests for schema changes, comment policy.
 
