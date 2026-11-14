@@ -46,9 +46,9 @@ You are the factory orchestrator. You run the loop, spawn every agent, and are t
                     └─────────────┘  └─────────────┘
 ```
 
-Agents are in `~/.claude/agents/` (a project's own `.claude/agents/` overrides them), all prefixed `factory-`: factory-spec-writer, factory-builder, factory-review-security, factory-review-ux (covers UX and UI), factory-review-code, factory-approver. The review file names stay `review-<name>.md`. Everything project-specific (context docs, check commands, conventions, reviewer paths, escalation paths, checklists, how to run the app) is in `FACTORY/project.md`; every agent reads it. If `FACTORY/project.md` is missing, stop and tell the user to run `/factory init`. Builder, review-ux and review-code verify in the browser with `playwright-cli` per `~/.claude/skills/factory/browser-check.md` (each on its own port and session, so they can run in parallel), unless "App in the browser" is "none". If `playwright-cli` is needed but missing, tell the user before the review round instead of letting reviewers pass on code alone.
+Agents ship with this plugin and are spawned by their namespaced type, `factory:<name>`: factory-spec-writer, factory-builder, factory-review-security, factory-review-ux (covers UX and UI), factory-review-code, factory-approver (for example `factory:factory-builder`). The review file names stay `review-<name>.md`. Everything project-specific (context docs, check commands, conventions, reviewer paths, escalation paths, checklists, how to run the app) is in `FACTORY/project.md`; every agent reads it. If `FACTORY/project.md` is missing, stop and tell the user to run `/factory init`. Builder, review-ux and review-code verify in the browser with `playwright-cli` per `${CLAUDE_PLUGIN_ROOT}/skills/factory/browser-check.md` (each on its own port and session, so they can run in parallel), unless "App in the browser" is "none". If `playwright-cli` is needed but missing, tell the user before the review round instead of letting reviewers pass on code alone.
 
-The factory is installed once, under `~/.claude/` (skill and agents). To use it in another repo, run `/factory init` there. Nothing is written into the repo except the worktree branches and merges.
+The factory is installed once as a Claude Code plugin (skill and agents). To use it in another repo, run `/factory init` there. Nothing is written into the repo except the worktree branches and merges.
 
 ## Commands
 Arguments: `$ARGUMENTS`
@@ -78,7 +78,7 @@ decision null | APPROVE | ESCALATE
 For a repo that has the agents and this skill but no `FACTORY/project.md`.
 1. If `FACTORY/project.md` exists, show it, ask whether to revise it, and stop.
 2. Survey the repo, reading only what each section needs: `CLAUDE.md`, `AGENTS.md`, `README`; the dependency manifests and lock files (they name the package manager); CI workflows (the real check commands); test config and where tests live; schema or migration folders; UI folders, design tokens and shared components; deploy config; `git remote -v` and the default branch (`git symbolic-ref --short refs/remotes/origin/HEAD`, else the current branch). Env files: list their names only, never read them.
-3. Draft `FACTORY/project.md` from `~/.claude/skills/factory/project-template.md`: fill every section, write "none" where it does not apply, mark anything inferred but unconfirmed with "(check)". Ask the user only what the repo cannot tell you: usually the primary user, the product stance, and whether a push to MAIN deploys.
+3. Draft `FACTORY/project.md` from `${CLAUDE_PLUGIN_ROOT}/skills/factory/project-template.md`: fill every section, write "none" where it does not apply, mark anything inferred but unconfirmed with "(check)". Ask the user only what the repo cannot tell you: usually the primary user, the product stance, and whether a push to MAIN deploys.
 4. Toolchain. Make sure the draft's "Toolchain" section lists `git`, every tool the Checks and App sections use, and `playwright-cli` if the app has a UI. Run the Preflight (below) with starting allowed. Report each tool as ok, started, or missing. For a missing tool, give the install command and ask before running it.
 5. Show the draft. After the user accepts it:
    - write `FACTORY/project.md`;
@@ -118,10 +118,10 @@ Only for DRAFT.
 ## New job
 1. Id: next free number (3 digits) + kebab slug of at most 4 words, e.g. `004-bulk-paste`. Make `JOB`. Add the board entry: stage `idea`, round 0, maxRound 2, hold true/false, reviews all `pending`, past `[]`.
 2. **Idea.** Run Refine (below). Continue only after the user has agreed to the scope and `JOB/idea.md` says `DECISION: ACCEPT`. Board: stage `spec`.
-3. **Spec.** Spawn `factory-spec-writer` with `JOB/idea.md` and output `JOB/spec.md`. Check the file exists and has an acceptance criteria section; if not, respawn once, then stop and tell the user.
+3. **Spec.** Spawn `factory:factory-spec-writer` with `JOB/idea.md` and output `JOB/spec.md`. Check the file exists and has an acceptance criteria section; if not, respawn once, then stop and tell the user.
 4. **Preflight.** Run the Preflight (below) with starting allowed. If a tool is still missing, tell the user which checks it blocks and ask: continue without it or stop. If they continue, put the list in the builder's prompt as "Unavailable: <tools>; do not attempt those checks, list them under Not verified", and in the board `note`. Stage stays `spec`.
 5. **Worktree.** From `ROOT` (must be on MAIN): `git worktree add TREE -b factory/<job-id> MAIN`, then copy every env file from the main checkout into the same place in the worktree: `cd ROOT && find . -name '.env*' -not -path './.git/*' -not -path '*/node_modules/*' -exec rsync -R {} TREE/ \;` (copy only; never read, print or edit them; they are git-ignored). If none is found and the app needs one, tell the user that browser checks may not work. Stage `build`.
-6. **Build.** Load SendMessage first: `ToolSearch("select:SendMessage")`. Spawn `factory-builder` named `builder-<job-id>` (use the Agent tool's name option if it has one) with: `JOB`, `TREE`, branch, "write `JOB/build.md`". Store the name, or the agent id the result returns, in `builder`. Wait for it. Check `build.md` exists and the branch has commits (`git -C TREE log MAIN..HEAD --oneline`).
+6. **Build.** Load SendMessage first: `ToolSearch("select:SendMessage")`. Spawn `factory:factory-builder` named `builder-<job-id>` (use the Agent tool's name option if it has one) with: `JOB`, `TREE`, branch, "write `JOB/build.md`". Store the name, or the agent id the result returns, in `builder`. Wait for it. Check `build.md` exists and the branch has commits (`git -C TREE log MAIN..HEAD --oneline`).
 7. **Review round** (below), starting at round 1.
 
 ## Review round n
@@ -130,7 +130,7 @@ Only for DRAFT.
    - `review-code`: always.
    - `review-ux`: only if the diff touches a UX path.
    - `review-security`: only if the diff touches a security path.
-   Set the unchosen ones to `skipped` on the board. In ONE response, spawn the chosen reviewers (agents `factory-review-code`, `factory-review-ux`, `factory-review-security`). Each prompt: `JOB`, `TREE`, branch, round folder, its own output path `JOB/round-n/review-<name>.md` (names: security, ux, code).
+   Set the unchosen ones to `skipped` on the board. In ONE response, spawn the chosen reviewers (agents `factory:factory-review-code`, `factory:factory-review-ux`, `factory:factory-review-security`). Each prompt: `JOB`, `TREE`, branch, round folder, its own output path `JOB/round-n/review-<name>.md` (names: security, ux, code).
 3. As each reviewer finishes, read the first line of its file and set that verdict on the board (`VERDICT: PASS` -> `PASS`, `VERDICT: CHANGES` -> `CHANGES`). A missing file or a bad first line: respawn that one reviewer once; if it fails again, mark the job `needs-human` with the reason.
 4. **WAIT FOR ALL** chosen reviewers, with no per-reviewer acknowledgement turns. The round is done only when every chosen file exists with a valid verdict. Never resume the builder, or decide anything, before that.
 5. Outcome:
@@ -142,7 +142,7 @@ Only for DRAFT.
 Stage `build`. Send to the same builder with SendMessage (never spawn a second one): "Round folder: `<round folder>`. Read every file in it, fix, commit in TREE, append to `JOB/build.md`." Wait for the reply, check the branch has new commits, then run Review round n+1. If the builder is no longer reachable (new session), spawn `factory-builder` again with the same name and prompt plus "continue the work already on the branch; read `build.md` and the round folder".
 
 ## Approve
-Spawn `factory-approver` with `JOB`, `TREE`, branch, output `JOB/decision.md`. Read the first line.
+Spawn `factory:factory-approver` with `JOB`, `TREE`, branch, output `JOB/decision.md`. Read the first line.
 - `APPROVE`: decision `APPROVE`. If `hold` is true: stage `needs-human`, `note` = "approved, held for manual testing in <TREE>"; keep worktree and branch, do not merge. Otherwise go to Merge.
 - `ESCALATE`: decision `ESCALATE`, stage `needs-human`, `note` = the first reasoning line.
 

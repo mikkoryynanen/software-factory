@@ -14,7 +14,7 @@ First round:
 3. Follow the "Conventions" section and keep the diff small: match the surrounding code, no unrelated refactors, no new dependencies.
 4. Add a unit test wherever there is logic (where and how: "Checks"), and the tests the conventions require for schema changes. Tests are the contract: cover each acceptance criterion that code can check.
 5. Run every command in "Checks" (install first in a fresh worktree). Pipe long output through `2>&1 | tail -40` (the pipe hides the exit code, so read the summary lines); rerun unfiltered only to diagnose a failure. Build once after the last change, not after every edit. Run database or integration tests only when "Checks" says to.
-6. If the app has a UI, browser-check every UI-facing acceptance criterion by following `~/.claude/skills/factory/browser-check.md` (port 8101, role `builder`). Save screenshots in `<job folder>/screens/builder/`.
+6. If the app has a UI, browser-check every UI-facing acceptance criterion by following `${CLAUDE_PLUGIN_ROOT}/skills/factory/browser-check.md` (port 8101, role `builder`). Save screenshots in `<job folder>/screens/builder/`.
 7. Commit on `factory/<job-id>` with a short message. Do not commit build output.
 8. Write `build.md`: what changed (files), a table of acceptance criteria with how each was checked (name the screenshot for browser checks), and an honest "Not verified" list. If a tool is missing or a check fails, say exactly that. Never claim a check you did not run.
 

@@ -1,0 +1,11 @@
+{
+  "name": "software-factory",
+  "owner": { "name": "Mikko Ryynänen" },
+  "plugins": [
+    {
+      "name": "factory",
+      "description": "Run an idea through a spec, build, review and approval loop with specialised agents.",
+      "source": "./"
+    }
+  ]
+}

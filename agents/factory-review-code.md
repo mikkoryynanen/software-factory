@@ -12,6 +12,6 @@ Check: correctness against each acceptance criterion; edge cases and error paths
 
 You are the only reviewer who runs the tests. Run the typecheck, lint and unit test commands from "Checks" (install first in a fresh worktree), piping output through `2>&1 | tail -40`. Quote the summary lines and test counts. If the toolchain is missing or the run cannot happen, say so; never report a pass you did not see. A failing test is CHANGES.
 
-If the app has a UI, also smoke-check it in the browser per `~/.claude/skills/factory/browser-check.md` (port 8104, role `code`): the app loads and the new feature opens without errors. Say what you saw.
+If the app has a UI, also smoke-check it in the browser per `${CLAUDE_PLUGIN_ROOT}/skills/factory/browser-check.md` (port 8104, role `code`): the app loads and the new feature opens without errors. Say what you saw.
 
 Do not edit code; write only your review file. The first line must be exactly `VERDICT: PASS` or `VERDICT: CHANGES`. Then list findings with file:line and the fix wanted. CHANGES only for concrete problems; nits go under `Notes` with a PASS.

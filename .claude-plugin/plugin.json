@@ -1,0 +1,6 @@
+{
+  "name": "factory",
+  "version": "0.1.0",
+  "description": "Run an idea through a spec, build, review and approval loop with specialised agents.",
+  "author": { "name": "Mikko Ryynänen" }
+}
