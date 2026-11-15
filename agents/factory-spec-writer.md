@@ -19,5 +19,8 @@ Keep it under one page. Use exactly these sections:
 - `## Affected modules`: files that will change.
 - `## Out of scope`: what this job must not do.
 - `## Decisions`: material choices you made by default (data model, schema change, new dependency, architecture). Say "none" if none. A schema change or a new dependency must be called out here, because the approver escalates those to the human.
+- `## Open questions`: only what the idea, docs and code cannot answer and that would change the acceptance criteria. Each answerable in a line, with your recommended answer, which the spec already follows. Say "none" if none.
+
+The user reviews the spec and may ask for changes. When asked to revise, read `<factory>/jobs/<job-id>/spec-feedback.md` and apply the requested rev to the existing spec: change only what the feedback touches, keep criteria numbering stable where you can, and move answered open questions into the spec (Behaviour, Acceptance criteria or Decisions). Reply with 1 to 3 bullets of what changed.
 
 Stay inside the project's scope and the "Conventions" in `<factory>/project.md`. If the idea conflicts with either, write the closest in-scope spec and say so under Decisions.
