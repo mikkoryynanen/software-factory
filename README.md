@@ -88,7 +88,7 @@ Key properties:
 Requirements: `git`, a main branch (`main` or similar), and [`playwright-cli`](https://github.com/microsoft/playwright-cli) if your app has a UI (used for browser checks).
 
 1. Install the plugin: `/plugin marketplace add mikkoryynanen/software-factory`, then `/plugin install factory@software-factory`.
-2. Open Claude Code in your target repo and run `/factory init`. It surveys the repo (docs, package manager, CI, tests, UI code) and drafts `project.md` in `~/.claude/factory/<project>/`: check commands, conventions, which paths trigger which reviewer, what to escalate, how to run the app. It asks only what it cannot infer, and you confirm the draft before anything is written.
+2. Open Claude Code in your target repo and run `/factory init`. It surveys the repo (docs, package manager, CI, tests, UI code) and drafts `project.md` in `~/.claude/factory/<project>/`: check commands, conventions, which paths trigger which reviewer, what to escalate, how to run the app. It asks only what it cannot infer, then offers to add knowledge sources outside the repo (a notes folder, Slack, Jira, Confluence) for the source scouts, including the read-only permissions they need. You confirm the draft and any settings change before anything is written.
 3. Dry run with a tiny idea: `/factory --hold <a tiny idea>`.
 
 ### Updating

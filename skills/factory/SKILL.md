@@ -91,15 +91,20 @@ server   null | http://localhost:<port>   review server started by `run`
 
 ## Init
 For a repo that has the agents and this skill but no `FACTORY/project.md`.
-1. If `FACTORY/project.md` exists, show it, ask whether to revise it, and stop.
+1. If `FACTORY/project.md` exists, show it and ask whether to revise it. If it has no "Sources" section, or the user wants to change sources, run Sources (step 5) on its own and write only that section; then stop.
 2. Survey the repo, reading only what each section needs: `CLAUDE.md`, `AGENTS.md`, `README`; the dependency manifests and lock files (they name the package manager); CI workflows (the real check commands); test config and where tests live; schema or migration folders; UI folders, design tokens and shared components; deploy config; `git remote -v` and the default branch (`git symbolic-ref --short refs/remotes/origin/HEAD`, else the current branch). Env files: list their names only, never read them.
-3. Draft `FACTORY/project.md` from `${CLAUDE_PLUGIN_ROOT}/skills/factory/project-template.md`: fill every section, write "none" where it does not apply, mark anything inferred but unconfirmed with "(check)". Ask the user only what the repo cannot tell you: usually the primary user, the product stance, whether a push to MAIN deploys, and which knowledge sources (notes folder, chat, tickets, wiki) hold context for this project, for "Sources".
+3. Draft `FACTORY/project.md` from `${CLAUDE_PLUGIN_ROOT}/skills/factory/project-template.md`: fill every section, write "none" where it does not apply, mark anything inferred but unconfirmed with "(check)". Ask the user only what the repo cannot tell you: usually the primary user, the product stance, and whether a push to MAIN deploys.
 4. Toolchain. Make sure the draft's "Toolchain" section lists `git`, every tool the Checks and App sections use, and `playwright-cli` if the app has a UI. Run the Preflight (below) with starting allowed. Report each tool as ok, started, or missing. For a missing tool, give the install command and ask before running it.
-5. Show the draft. After the user accepts it:
+5. Sources. Ask whether other sources hold context for this project beyond the repo: a notes folder (Obsidian), chat (Slack), tickets (Jira), a wiki (Confluence). Each one gets a source scout per job. Say they are optional and read-only. For each source the user names:
+   - folder: check it exists. Propose adding it to `permissions.additionalDirectories` in `~/.claude/settings.json` (background scouts cannot ask for permission, so unlisted folders are denied).
+   - MCP server: check it is connected (`claude mcp list`). If not, tell the user to add it with `claude mcp add --transport http <name> --scope user <url from the vendor's docs>` and sign in with `/mcp`, then continue. List the server's tools and propose `permissions.allow` rules for its search, list and read tools only, plus `permissions.deny` rules for any tool that creates, updates, deletes, posts or sends. Tools left unallowed are denied to background scouts.
+   - CLI only: not supported (scouts have no Bash); say so and skip it.
+   Show the settings change and write it only after the user says yes; never remove existing entries. Add one line per source to "Sources" (`name | access | what it holds`), or "none".
+6. Show the draft. After the user accepts it:
    - write `FACTORY/project.md`;
    - create `FACTORY/board.json` as `{ "jobs": [] }` and `FACTORY/backlog.md` (`# Backlog`, a blank line, "Run the first unchecked item with `/factory next`.") if they are missing;
    - leave the repo untouched: no `.gitignore` or `CLAUDE.md` edits.
-6. Show what was written under `FACTORY` and suggest a dry run: `/factory --hold <a tiny feature>`.
+7. Show what was written under `FACTORY` and any settings changed, and suggest a dry run: `/factory --hold <a tiny feature>`.
 
 ## Preflight
 Read "Toolchain" in `FACTORY/project.md`. Run each tool's check command. If one fails and it has a start command, run it, then poll the check every 5 seconds for up to 90 seconds. A local database service (for example `supabase start`) is started only after its dependency (Docker) is up. Never install anything and never touch env files. Result per tool: ok, started, or missing (with the reason). If "Toolchain" is missing, derive the list from "Checks" and say that you did.
@@ -194,7 +199,7 @@ End with at most five lines: job id, stage, rounds used, the `note` if any, and 
 
 ## Rules
 - The factory is for code changes only. If the request is for mockups or screenshots of a design, do not start a job: tell the user to make them outside the factory.
-- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, and the files `init` creates.
+- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, the files `init` creates, and, after the user says yes in `init`, the source permission entries in `~/.claude/settings.json`.
 - Never read, print, edit or commit env files or credentials. The only allowed action is the plain copy of env files into the worktree in New job step 4.
 - The only push allowed is the MAIN push in Merge, after a successful merge. Never push a `factory/*` or `needs-human/*` branch, never use `--force`, `--all`, `--tags` or `-u` with another ref, and never push from any other step or agent.
 - Report what happened, including failures and anything agents said they did not verify.
