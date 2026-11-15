@@ -17,6 +17,11 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
                    └─────────┬────────┘
                              ▼ you say go
                    ┌──────────────────┐
+                   │  scouts (2 to 4) │
+                   │  haiku, parallel │
+                   └─────────┬────────┘
+                             ▼ scout-*.md
+                   ┌──────────────────┐
                    │   spec-writer    │◄─┐ your changes
                    │       opus       │  │ or answers
                    └─────────┬────────┘  │
@@ -65,7 +70,8 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
 
 | Agent | Job |
 |---|---|
-| `spec-writer` | Turns the request into a short spec with testable acceptance criteria |
+| `scout` | Answers one question about the code and docs (current behaviour, patterns to copy, tests, data) in a short file; several run in parallel on Haiku |
+| `spec-writer` | Turns the request and the scout findings into a short spec with testable acceptance criteria |
 | `builder` | Implements the spec on its own branch and worktree, writes tests, runs the checks |
 | `review-code` | Checks correctness, conventions and tests; the only reviewer that runs the test suite |
 | `review-ux` | Checks the flow and visual consistency, in a real browser (only when UI files changed) |
@@ -137,7 +143,7 @@ Typical flow:
 ```
 this repo (the plugin)
   .claude-plugin/         plugin.json and marketplace.json
-  agents/factory-*.md     the six agents above
+  agents/factory-*.md     the seven agents above
   skills/factory/
     SKILL.md              the orchestrator: the /factory command and the loop
     project-template.md   template for project.md
@@ -148,7 +154,7 @@ this repo (the plugin)
     project.md            your project config
     board.json            job state
     backlog.md            queue for `/factory next`
-    jobs/<job-id>/        idea.md, spec.md, spec-feedback.md, build.md, round-N/review-*.md, decision.md, test.md, server.log
+    jobs/<job-id>/        idea.md, scout-*.md, spec.md, spec-feedback.md, build.md, round-N/review-*.md, decision.md, test.md, server.log
     worktrees/<job-id>/   one git worktree per running job
 ```
 
