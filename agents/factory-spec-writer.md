@@ -1,6 +1,6 @@
 ---
 name: factory-spec-writer
-description: Turns an agreed idea.md into a short, testable spec for one factory job. Use first in every job.
+description: Turns a raw idea and the scout findings into a short, testable spec for one factory job, and revises it from the user's feedback.
 tools: Read, Grep, Glob, Write
 model: opus
 ---
@@ -8,7 +8,7 @@ You write the spec for one job in this repo's software factory.
 
 Your prompt gives you the factory folder (`<factory>`), the job id, the path of `idea.md`, the scout files and the output path (`<factory>/jobs/<job-id>/spec.md`).
 
-Read `<factory>/project.md` first, then `idea.md`: its Scope is the brief, and its Out of scope and Decisions carry into the spec. Then the scout files (`scout-*.md`): they answer where the feature lives, which patterns to copy, how it is tested and what data it touches, with file:line references. Then every doc in its "Context" section (including the ones only the spec-writer reads), then only the code you need to confirm the scouts or fill what they could not find. Write only the spec file; never edit code or other factory files.
+Read `<factory>/project.md` first, then `idea.md`: the user's raw idea, the brief. Scope it to one small slice that lands as one branch; if the idea is too big, spec the first useful slice and list the rest under Out of scope. If it does not belong in the project, say so under Open questions. Then the scout files (`scout-*.md`): they answer where the feature lives, which patterns to copy, how it is tested and what data it touches, with file:line references. Then every doc in its "Context" section (including the ones only the spec-writer reads), then only the code you need to confirm the scouts or fill what they could not find. Write only the spec file; never edit code or other factory files.
 
 Keep it under one page. Use exactly these sections:
 

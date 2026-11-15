@@ -1,17 +1,14 @@
 ---
 name: factory
-description: Run an idea through the software factory loop (idea chat, spec, build, up to three reviews, approval, merge). Commands - /factory <idea>, next, continue <job-id>, run <job-id>, stop [<job-id>], approve <job-id>, rework <job-id> <note>, reject <job-id>, init.
+description: Run an idea through the software factory loop (scouts, spec review, build, up to three reviews, approval, merge). Commands - /factory <idea>, next, continue <job-id>, run <job-id>, stop [<job-id>], approve <job-id>, rework <job-id> <note>, reject <job-id>, init.
 argument-hint: [--hold] <idea> | [--hold] next | continue <job-id> | run <job-id> | stop [<job-id>] | approve <job-id> | rework <job-id> <note> | reject <job-id> | init
 disable-model-invocation: true
 ---
 You are the factory orchestrator. You run the loop, spawn every agent, and are the only writer of `FACTORY/board.json`. Agents read and write files, not the conversation.
 
 ```
-                         ┌──────────────────┐
-                         │    idea chat     │
-                         │ orchestrator+you │
-                         └─────────┬────────┘
-                                   ▼ you say go
+                                   │ /factory <idea>
+                                   ▼
                          ┌──────────────────┐
                          │  scouts (2 to 4) │
                          │  haiku, parallel │
@@ -69,7 +66,7 @@ Arguments: `$ARGUMENTS`
 - `--hold` (optional, first argument, works with `<idea>` and `next`): strip it from the idea text, set `hold: true` on the job. After an APPROVE the job stops at `needs-human` instead of merging, so the feature can be tested on `needs-human/<job-id>`.
 - `<idea>`: new job (below).
 - `next`: take the first `- [ ]` item in `FACTORY/backlog.md` as the idea, change it to `- [x] <text> (<job-id>)`, run a new job.
-- `continue <job-id>`: job must be stage `idea` or `spec`. For `idea`, run Refine again, starting from `JOB/idea.md` (a draft). For `spec`, continue New job from step 3: Spec review if `JOB/spec.md` exists, else the spec-writer (scouts first if no `JOB/scout-*.md` exists).
+- `continue <job-id>`: job must be stage `spec`. Continue New job from step 3: Spec review if `JOB/spec.md` exists, else the spec-writer (scouts first if no `JOB/scout-*.md` exists).
 - `run <job-id>`: job must be `needs-human`. Do "Run for human".
 - `stop [<job-id>]`: do "Stop server" for that job, or for every job with a `server` on the board.
 - `approve <job-id>`: job must be `needs-human`. Do "Stop server", then "Merge", set `note` to "approved by human".
@@ -90,7 +87,7 @@ past     [ { security, ux, code } ]   verdicts of earlier rounds, oldest first
 decision null | APPROVE | ESCALATE
 server   null | http://localhost:<port>   review server started by `run`
 ```
-`stage` is one of: `idea`, `spec`, `build`, `review`, `approve`, `needs-human`, `merged`, `rejected`. `builder` is the builder's name or agent id (see below). `note` is a short human-readable status or the escalation reason. The no-argument summary shows `server` when it is set. Every time a job enters `needs-human`, from any step, do "Hand to human" before writing the board.
+`stage` is one of: `spec`, `build`, `review`, `approve`, `needs-human`, `merged`, `rejected`. `builder` is the builder's name or agent id (see below). `note` is a short human-readable status or the escalation reason. The no-argument summary shows `server` when it is set. Every time a job enters `needs-human`, from any step, do "Hand to human" before writing the board.
 
 ## Init
 For a repo that has the agents and this skill but no `FACTORY/project.md`.
@@ -107,40 +104,14 @@ For a repo that has the agents and this skill but no `FACTORY/project.md`.
 ## Preflight
 Read "Toolchain" in `FACTORY/project.md`. Run each tool's check command. If one fails and it has a start command, run it, then poll the check every 5 seconds for up to 90 seconds. A local database service (for example `supabase start`) is started only after its dependency (Docker) is up. Never install anything and never touch env files. Result per tool: ok, started, or missing (with the reason). If "Toolchain" is missing, derive the list from "Checks" and say that you did.
 
-## Refine
-Stage `idea`. You talk with the user directly; no agent. The idea comes from the command or the backlog item.
-1. Read `FACTORY/project.md`, the docs in its "Context" section, and only the code the idea touches. Read `JOB/idea.md` if it exists (a draft from an earlier session).
-2. Ask only what the code cannot answer: at most three questions at a time, each answerable in a line, each with your recommended answer. Stop asking once the scope is clear.
-3. Propose the scope: one small slice that lands as one branch, what is left out and why. If the idea is too big, propose the first useful slice. If it does not belong in this project or is not worth building, say so and ask whether to drop it.
-4. Rate risk (`low`: contained and easy to verify; `medium`: several files or shared code; `high`: data, money, auth, migrations, anything hard to undo) and surfaces (`ui`, `security`, or `none`).
-5. Write `JOB/idea.md` and show the user a short version:
-```
-DECISION: ACCEPT | DRAFT | REJECT
-RISK: low | medium | high
-SURFACES: ui, security | ui | security | none
-## Summary
-- 3 to 5 short bullets
-## Scope
-What will be built, specific about behaviour.
-## Out of scope
-## Decisions
-The user's answers and the defaults you chose.
-## Open questions
-Only for DRAFT.
-```
-6. Outcome:
-   - the user agrees ("go", "ok", or equivalent): `DECISION: ACCEPT`, then continue New job.
-   - the user stops or has open questions: `DECISION: DRAFT`, stage stays `idea`, `note` = the open question. Tell the user `/factory continue <job-id>` resumes.
-   - the user drops it: `DECISION: REJECT`, stage `rejected`, `note` = why. Stop.
-
 ## Scout
 Before the spec-writer, gather what the code and docs already answer. Questions, one scout each:
-- `current`: where does the behaviour in the idea's Scope live today, its entry points and how data flows through it?
+- `current`: where does the behaviour the idea changes live today, its entry points and how data flows through it?
 - `patterns`: which existing feature is closest to copy, and which shared components, utilities and conventions does it use?
 - `tests`: how is similar code tested, where do those tests live, and which check commands run them?
 - `data` (only if the idea touches data, schema, storage or an API): which schema, migrations and API contracts are involved?
 
-Add one idea-specific question if the Decisions in `idea.md` leave something the code could answer. In ONE response, spawn `factory:factory-scout` per question with: `FACTORY`, job id, `JOB/idea.md`, topic, question, output `JOB/scout-<topic>.md`. Wait for all. A missing file: respawn that scout once, then continue without it and tell the spec-writer which topic is missing.
+Add one idea-specific question if the idea names something the code could answer (a screen, an endpoint, a component). At most 5 scouts. In ONE response, spawn `factory:factory-scout` per question with: `FACTORY`, job id, `JOB/idea.md`, topic, question, output `JOB/scout-<topic>.md`. Wait for all. A missing file: respawn that scout once, then continue without it and tell the spec-writer which topic is missing.
 
 ## Spec review
 Stage `spec`. The spec is the user's document, iterated until it is complete; you talk with the user directly. Rev 1 is the first draft.
@@ -163,8 +134,8 @@ Reply: go | a change | a question
 3. The spec is complete when it has no open questions and the user says go. If they say go while questions are open, use the recommended answers, revise once, and show the highlights for a final go. Board: `note` = "spec rev <n> approved".
 
 ## New job
-1. Id: next free number (3 digits) + kebab slug of at most 4 words, e.g. `004-bulk-paste`. Make `JOB`. Add the board entry: stage `idea`, round 0, maxRound 2, hold true/false, reviews all `pending`, past `[]`.
-2. **Idea.** Run Refine (below). Continue only after the user has agreed to the scope and `JOB/idea.md` says `DECISION: ACCEPT`. Board: stage `spec`.
+1. Id: next free number (3 digits) + kebab slug of at most 4 words, e.g. `004-bulk-paste`. Make `JOB`. Add the board entry: stage `spec`, round 0, maxRound 2, hold true/false, reviews all `pending`, past `[]`.
+2. **Idea.** Write the idea text, verbatim, to `JOB/idea.md` under `# <title>`. No chat: questions and scope are settled in Spec review.
 3. **Scout and spec.** Run Scout (below), then spawn `factory:factory-spec-writer` named `spec-<job-id>` with `JOB/idea.md`, the scout files, and output `JOB/spec.md`. Check the file exists and has an acceptance criteria section; if not, respawn once, then stop and tell the user. Then run Spec review (above). Continue only after the user approves the spec.
 4. **Preflight.** Run the Preflight (below) with starting allowed. If a tool is still missing, tell the user which checks it blocks and ask: continue without it or stop. If they continue, put the list in the builder's prompt as "Unavailable: <tools>; do not attempt those checks, list them under Not verified", and in the board `note`. Stage stays `spec`.
 5. **Worktree.** From `ROOT` (must be on MAIN): `git worktree add TREE -b factory/<job-id> MAIN`, then copy every env file from the main checkout into the same place in the worktree: `cd ROOT && find . -name '.env*' -not -path './.git/*' -not -path '*/node_modules/*' -exec rsync -R {} TREE/ \;` (copy only; never read, print or edit them; they are git-ignored). If none is found and the app needs one, tell the user that browser checks may not work. Stage `build`.

@@ -1,6 +1,6 @@
 # Software factory
 
-A portable [Claude Code](https://claude.com/claude-code) setup that turns an idea into reviewed, merged code. You describe an idea and talk it through with the factory first; then a team of specialised agents writes the spec, builds it on a branch, reviews it, and either merges it or hands it back to you.
+A portable [Claude Code](https://claude.com/claude-code) setup that turns an idea into reviewed, merged code. You describe an idea; scouts research the codebase, a spec-writer drafts a spec you iterate on until it's right, then a team of specialised agents builds it on a branch, reviews it, and either merges it or hands it back to you.
 
 Installed once as a Claude Code plugin (agents plus one skill). Everything the factory writes (project config, job state, worktrees) lives in `~/.claude/factory/<project>/`, not in your repo.
 
@@ -9,13 +9,8 @@ Installed once as a Claude Code plugin (agents plus one skill). Everything the f
 One AI agent writing and judging its own code is unreliable. The factory splits the work across agents with narrow jobs, and keeps a human in control of anything risky:
 
 ```
-                   ┌──────────────────┐
-                   │   orchestrator   │
-                   │    (idea chat)   │
-                   │  asks you if the │
-                   │ task is unclear  │
-                   └─────────┬────────┘
-                             ▼ you say go
+                             │ /factory <idea>
+                             ▼
                    ┌──────────────────┐
                    │  scouts (2 to 4) │
                    │  haiku, parallel │
@@ -84,7 +79,6 @@ Key properties:
 - **Independent review.** Reviewers run in parallel, only read the diff, and cannot edit code. If any asks for changes, the same builder fixes them, up to two rounds.
 - **Humans decide the risky bits.** The approver escalates schema changes, new dependencies, build/infra changes, data deletion, unmet or unchecked acceptance criteria, and anything it is unsure about.
 - **Safe git.** Only an approved merge lands on your main branch, and only the main branch is ever pushed. Never `--force`, never a `factory/*` or `needs-human/*` branch. Env files are copied into worktrees but never read or committed.
-- **Idea first.** Before any spec, the orchestrator talks the idea through with you: it asks only what the code can't answer, proposes one small scope, and writes `idea.md`.
 - **You own the spec.** After the first draft you see its highlights (goal, acceptance criteria, decisions, open questions) and a link to the full `spec.md`. Ask questions or request changes; the spec-writer revises and you see what changed, for as many rounds as it takes. Building starts only when you say go.
 - **Everything is files.** Ideas, specs, build notes, reviews and decisions live in `~/.claude/factory/<project>/jobs/<job-id>/`, and `board.json` there tracks job state.
 
@@ -116,10 +110,10 @@ Your projects need nothing else: `~/.claude/factory/<project>/` is picked up as 
 
 | Command | What it does |
 |---|---|
-| `/factory <idea>` | Talk the idea through, then run a new job end to end |
+| `/factory <idea>` | Scout, spec it with you, then run a new job end to end |
 | `/factory --hold <idea>` | Same, but stop after approval so you can test the branch before merging |
-| `/factory next` | Take the first unchecked item in `backlog.md` and run it (it starts with the idea chat too) |
-| `/factory continue <job-id>` | Resume an idea chat or spec review you paused |
+| `/factory next` | Take the first unchecked item in `backlog.md` and run it (it starts with the spec review too) |
+| `/factory continue <job-id>` | Resume a spec review you paused |
 | `/factory run <job-id>` | Serve a `needs-human` job's branch locally, open it, and print its test steps |
 | `/factory stop [<job-id>]` | Stop that job's review server, or all of them |
 | `/factory approve <job-id>` | Merge a job that is waiting on you (`needs-human`), including commits you added to its branch |
@@ -131,7 +125,7 @@ Your projects need nothing else: `~/.claude/factory/<project>/` is picked up as 
 Typical flow:
 
 1. `/factory add bulk paste to the import dialog`
-2. Answer the factory's few questions and say go. Review the spec highlights, ask or request changes until it's right, and say go again. Watch it build and review. At the end you get at most five lines: job id, stage, rounds used, a note, and the next command.
+2. Review the spec highlights, answer its open questions, ask or request changes until it's right, and say go again. Watch it build and review. At the end you get at most five lines: job id, stage, rounds used, a note, and the next command.
 3. If the job is `needs-human`, read `test.md`, then either `/factory run <job-id>` to try it in the browser or `git switch needs-human/<job-id>` to review and edit it in your own checkout. Finish with `/factory approve <job-id>`, `/factory rework <job-id> <what to change>` or `/factory reject <job-id>`.
 
 ## Configuring for your project
