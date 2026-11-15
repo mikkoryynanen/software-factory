@@ -1,7 +1,7 @@
 ---
 name: factory
-description: Run an idea through the software factory loop (idea chat, spec, build, up to three reviews, approval, merge). Commands - /factory <idea>, next, continue <job-id>, approve <job-id>, rework <job-id> <note>, init.
-argument-hint: [--hold] <idea> | [--hold] next | continue <job-id> | approve <job-id> | rework <job-id> <note> | init
+description: Run an idea through the software factory loop (idea chat, spec, build, up to three reviews, approval, merge). Commands - /factory <idea>, next, continue <job-id>, run <job-id>, stop [<job-id>], approve <job-id>, rework <job-id> <note>, reject <job-id>, init.
+argument-hint: [--hold] <idea> | [--hold] next | continue <job-id> | run <job-id> | stop [<job-id>] | approve <job-id> | rework <job-id> <note> | reject <job-id> | init
 disable-model-invocation: true
 ---
 You are the factory orchestrator. You run the loop, spawn every agent, and are the only writer of `FACTORY/board.json`. Agents read and write files, not the conversation.
@@ -41,9 +41,13 @@ You are the factory orchestrator. You run the loop, spawn every agent, and are t
                          └─┬───────────────┬┘
                  APPROVE   │               │  ESCALATE
                            ▼               ▼
-                    ┌─────────────┐  ┌─────────────┐
-                    │merge to MAIN│  │ needs-human │
-                    └─────────────┘  └─────────────┘
+                    ┌─────────────┐  ┌──────────────────────┐
+                    │merge to MAIN│  │ needs-human/<job-id> │
+                    └─────────────┘  │ branch + test.md     │
+                           ▲         └──────────┬───────────┘
+                           │ approve            ▼ run, test
+                           └──────────────── you ──── rework ─► builder
+                                                └──── reject
 ```
 
 Agents ship with this plugin and are spawned by their namespaced type, `factory:<name>`: factory-spec-writer, factory-builder, factory-review-security, factory-review-ux (covers UX and UI), factory-review-code, factory-approver (for example `factory:factory-builder`). The review file names stay `review-<name>.md`. Everything project-specific (context docs, check commands, conventions, reviewer paths, escalation paths, checklists, how to run the app) is in `FACTORY/project.md`; every agent reads it. If `FACTORY/project.md` is missing, stop and tell the user to run `/factory init`. Builder, review-ux and review-code verify in the browser with `playwright-cli` per `${CLAUDE_PLUGIN_ROOT}/skills/factory/browser-check.md` (each on its own port and session, so they can run in parallel), unless "App in the browser" is "none". If `playwright-cli` is needed but missing, tell the user before the review round instead of letting reviewers pass on code alone.
@@ -52,12 +56,15 @@ The factory is installed once as a Claude Code plugin (skill and agents). To use
 
 ## Commands
 Arguments: `$ARGUMENTS`
-- `--hold` (optional, first argument, works with `<idea>` and `next`): strip it from the idea text, set `hold: true` on the job. After an APPROVE the job stops at `needs-human` instead of merging, so the feature can be tested in TREE.
+- `--hold` (optional, first argument, works with `<idea>` and `next`): strip it from the idea text, set `hold: true` on the job. After an APPROVE the job stops at `needs-human` instead of merging, so the feature can be tested on `needs-human/<job-id>`.
 - `<idea>`: new job (below).
 - `next`: take the first `- [ ]` item in `FACTORY/backlog.md` as the idea, change it to `- [x] <text> (<job-id>)`, run a new job.
 - `continue <job-id>`: job must be stage `idea`. Run Refine again, starting from `JOB/idea.md` (a draft).
-- `approve <job-id>`: job must be `needs-human`. Do "Merge", set `note` to "approved by human".
-- `rework <job-id> <note>`: job must be `needs-human` or `review`. Write the note to `JOB/round-<n+1>/rework.md` (n = current round), set `maxRound` to n+2, and go to "Resume builder" with that round folder. Reviews for round n+1 then run as usual.
+- `run <job-id>`: job must be `needs-human`. Do "Run for human".
+- `stop [<job-id>]`: do "Stop server" for that job, or for every job with a `server` on the board.
+- `approve <job-id>`: job must be `needs-human`. Do "Stop server", then "Merge", set `note` to "approved by human".
+- `rework <job-id> <note>`: job must be `needs-human` or `review`. Do "Stop server". If `needs-human/<job-id>` exists, do "Take back human branch"; stop if it fails. Write the note to `JOB/round-<n+1>/rework.md` (n = current round), set `maxRound` to n+2, and go to "Resume builder" with that round folder. Reviews for round n+1 then run as usual.
+- `reject <job-id>`: job must be `needs-human`. Show the user the commits on `factory/<job-id>` and `needs-human/<job-id>` that are not on MAIN and ask them to confirm deleting them. After a yes: "Stop server", `git worktree remove TREE` (never `--force`; if it refuses, report why and stop), `git branch -D factory/<job-id> needs-human/<job-id>`, stage `rejected`, `note` = "rejected by human".
 - `init`: set up the factory in this repo (below).
 - no arguments: print a one-line-per-job summary of the board and stop.
 
@@ -71,8 +78,9 @@ id, title, branch, stage, round, maxRound, builder, hold, note,
 reviews  { security, ux, code }   current round: pending | PASS | CHANGES | skipped
 past     [ { security, ux, code } ]   verdicts of earlier rounds, oldest first
 decision null | APPROVE | ESCALATE
+server   null | http://localhost:<port>   review server started by `run`
 ```
-`stage` is one of: `idea`, `spec`, `build`, `review`, `approve`, `needs-human`, `merged`, `rejected`. `builder` is the builder's name or agent id (see below). `note` is a short human-readable status or the escalation reason.
+`stage` is one of: `idea`, `spec`, `build`, `review`, `approve`, `needs-human`, `merged`, `rejected`. `builder` is the builder's name or agent id (see below). `note` is a short human-readable status or the escalation reason. The no-argument summary shows `server` when it is set. Every time a job enters `needs-human`, from any step, do "Hand to human" before writing the board.
 
 ## Init
 For a repo that has the agents and this skill but no `FACTORY/project.md`.
@@ -142,19 +150,43 @@ Only for DRAFT.
 Stage `build`. Send to the same builder with SendMessage (never spawn a second one): "Round folder: `<round folder>`. Read every file in it, fix, commit in TREE, append to `JOB/build.md`." Wait for the reply, check the branch has new commits, then run Review round n+1. If the builder is no longer reachable (new session), spawn `factory-builder` again with the same name and prompt plus "continue the work already on the branch; read `build.md` and the round folder".
 
 ## Approve
-Spawn `factory:factory-approver` with `JOB`, `TREE`, branch, output `JOB/decision.md`. Read the first line.
-- `APPROVE`: decision `APPROVE`. If `hold` is true: stage `needs-human`, `note` = "approved, held for manual testing in <TREE>"; keep worktree and branch, do not merge. Otherwise go to Merge.
+Spawn `factory:factory-approver` with `JOB`, `TREE`, branch, outputs `JOB/decision.md` and `JOB/test.md`. Read the first line.
+- `APPROVE`: decision `APPROVE`. If `hold` is true: stage `needs-human`, `note` = "approved, held for manual testing"; keep worktree and branch, do not merge. Otherwise go to Merge.
 - `ESCALATE`: decision `ESCALATE`, stage `needs-human`, `note` = the first reasoning line.
 
 ## Merge
-From `ROOT` on MAIN: `git merge --no-ff factory/<job-id> -m "Merge factory/<job-id>: <title>"`, following the user's commit attribution rules. On any conflict or refusal, `git merge --abort`, stage `needs-human`, `note` = why. On success: stage `merged`, `git worktree remove TREE`, then `git branch -d factory/<job-id>` (safe delete; if it refuses, keep the branch and put why in `note`). Write the board. Then, only after a successful merge and only if "Branch and push" says to push, push MAIN and nothing else with the command given there. If the push fails, the job stays `merged`, `note` = "merged locally, push failed: <why>"; do not retry with force. Never force anything.
+`SRC` = `needs-human/<job-id>` if that branch exists (it may hold the user's own commits), else `factory/<job-id>`. If `ROOT` is not on MAIN (for example the user still has `needs-human/<job-id>` checked out), stop and ask the user to switch to MAIN; never switch for them. From `ROOT` on MAIN: `git merge --no-ff SRC -m "Merge factory/<job-id>: <title>"`, following the user's commit attribution rules. On any conflict or refusal, `git merge --abort`, stage `needs-human`, `note` = why. On success: stage `merged`, `git worktree remove TREE`, then `git branch -d needs-human/<job-id> factory/<job-id>` for the ones that exist (safe delete; if one refuses, keep it and put why in `note`). Write the board. Then, only after a successful merge and only if "Branch and push" says to push, push MAIN and nothing else with the command given there. If the push fails, the job stays `merged`, `note` = "merged locally, push failed: <why>"; do not retry with force. Never force anything.
+
+## Hand to human
+Makes a `needs-human` job testable outside the agent worktree. Agents keep working on `factory/<job-id>` in TREE; the user gets their own branch.
+1. If `needs-human/<job-id>` does not exist: `git -C ROOT branch needs-human/<job-id> factory/<job-id>`. If it exists and `git merge-base --is-ancestor needs-human/<job-id> factory/<job-id>` succeeds, move it to the new tip with `git branch -f needs-human/<job-id> factory/<job-id>` (unless it is checked out in ROOT; then say so in `note`). Otherwise it has the user's commits: leave it and say so in `note`.
+2. If `JOB/test.md` is missing (the approver did not run), write it yourself from `spec.md`, `build.md` and the reason, in the format the approver uses.
+3. Never push a `needs-human/*` branch, and never create a bare `needs-human` branch (it would block the prefix).
+
+## Run for human
+Serve a `needs-human` job so the user can try it. Servers started here are throwaway: one per job, stopped by `stop`, `approve`, `rework` and `reject`.
+1. If "App in the browser" in `FACTORY/project.md` is "none": print `git switch needs-human/<job-id>`, the path to `JOB/test.md` and its steps, and stop.
+2. If `server` is set and its port answers, print it and stop.
+3. Sync TREE to the user's branch: if `needs-human/<job-id>` has commits not on `factory/<job-id>`, run `git -C TREE merge --ff-only needs-human/<job-id>`. If that fails, tell the user why and stop.
+4. Run the Preflight with starting allowed. Run the install command from "Checks" in TREE if the dependency manifests or lock files differ from MAIN. If `JOB/test.md` lists setup steps (migrations, seed data), show them and run them only after the user says yes.
+5. Pick the first free port from 8100 up (`lsof -iTCP:<port> -sTCP:LISTEN` returns nothing). Start the serve command detached from the session: `cd TREE && nohup <serve command> --port <port> > JOB/server.log 2>&1 & echo $! > JOB/server.pid`. Poll `curl -s -o /dev/null http://localhost:<port>/` every 2 seconds for up to 90 seconds. If it never answers, show the last 20 lines of `JOB/server.log`, do "Stop server", and stop.
+6. Set `server` = `http://localhost:<port>` on the board, `open` the URL, and print: the URL, `JOB/server.log`, the steps from `JOB/test.md`, and the next commands (`/factory approve|rework|reject <job-id>`, `/factory stop <job-id>`).
+
+## Stop server
+If `server` is set: kill the pid in `JOB/server.pid` and anything still listening on the port (`lsof -ti tcp:<port> -sTCP:LISTEN | xargs kill`), delete `JOB/server.pid`, set `server` to null, write the board. Nothing else.
+
+## Take back human branch
+Before the builder resumes, bring the user's commits into the agent branch and remove the human branch so it does not go stale.
+1. If `needs-human/<job-id>` is checked out in ROOT, stop and ask the user to switch away.
+2. If it has commits not on `factory/<job-id>`: `git -C TREE merge --no-ff needs-human/<job-id> -m "Merge human changes into factory/<job-id>"`. On conflict, `git -C TREE merge --abort` and stop with the reason.
+3. Confirm `git merge-base --is-ancestor needs-human/<job-id> factory/<job-id>`, then `git branch -D needs-human/<job-id>` (safe: its commits are on the agent branch). Delete `JOB/test.md`; the next escalation writes a new one.
 
 ## Finish
-End with at most five lines: job id, stage, rounds used, the `note` if any, and the next command the user may want (`/factory approve <id>` for needs-human).
+End with at most five lines: job id, stage, rounds used, the `note` if any, and the next command the user may want. For needs-human: `/factory run <id>` (or `git switch needs-human/<id>`), then `/factory approve|rework|reject <id>`.
 
 ## Rules
 - The factory is for code changes only. If the request is for mockups or screenshots of a design, do not start a job: tell the user to make them outside the factory.
-- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. The only other files you write are `idea.md`, `decision.md` when rounds run out, `rework.md`, and the files `init` creates.
+- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. The only other files you write are `idea.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, and the files `init` creates.
 - Never read, print, edit or commit env files or credentials. The only allowed action is the plain copy of env files into the worktree in New job step 4.
-- The only push allowed is the MAIN push in Merge, after a successful merge. Never push a `factory/*` branch, never use `--force`, `--all`, `--tags` or `-u` with another ref, and never push from any other step or agent.
+- The only push allowed is the MAIN push in Merge, after a successful merge. Never push a `factory/*` or `needs-human/*` branch, never use `--force`, `--all`, `--tags` or `-u` with another ref, and never push from any other step or agent.
 - Report what happened, including failures and anything agents said they did not verify.
