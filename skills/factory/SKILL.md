@@ -106,10 +106,10 @@ Read "Toolchain" in `FACTORY/project.md`. Run each tool's check command. If one 
 
 ## Scout
 Before the spec-writer, gather what the code and the project's knowledge sources already answer. One scout per source, in ONE response:
-- Code: always. Spawn `factory:factory-scout-code` (sonnet) with `FACTORY`, job id, `JOB/idea.md`, "full scout", output `JOB/scout-code.md`.
-- Each entry in "Sources" in `FACTORY/project.md` (none if the section is missing or "none"): spawn `factory:factory-scout-source` (haiku) with `FACTORY`, job id, `JOB/idea.md`, that entry verbatim, output `JOB/scout-<source>.md` (kebab-case source name).
+- Code: always. Spawn `factory:factory-scout-code` (sonnet) with `FACTORY`, job id, `JOB/idea.md`, "full scout". Save as `JOB/scout-code.md`.
+- Each entry in "Sources" in `FACTORY/project.md` (none if the section is missing or "none"): spawn `factory:factory-scout-source` (haiku) with `FACTORY`, job id, `JOB/idea.md`, that entry verbatim. Save as `JOB/scout-<source>.md` (kebab-case source name).
 
-Wait for all. For each missing file: if the scout's reply holds the file's content (it starts with `# Scout:`), write it to the output path yourself. Otherwise respawn that scout once; if it fails again, continue without it and tell the spec-writer which source is missing.
+Scouts are read-only and write nothing; their reply is the result. Wait for all, then write each reply, from `# Scout:` on, to its file unchanged. A reply without `# Scout:`: respawn that scout once; if it fails again, continue without it and tell the spec-writer which source is missing.
 
 ## Spec review
 Stage `spec`. The spec is the user's document, iterated until it is complete; you talk with the user directly. Rev 1 is the first draft.
@@ -125,7 +125,7 @@ Open questions: each with the spec-writer's recommended answer (omit if none)
 Reply: go | a change | a question
 ```
 2. Handle the reply, as many times as needed:
-   - a question about the spec: answer from the spec, `idea.md` and the scout files; if they do not cover it, spawn `factory:factory-scout-code` with that one question, output `JOB/scout-q<k>.md`, and answer from its file (at most 3 such scouts per rev). Do not change anything. If the answer shows the spec is wrong or incomplete, propose the change and treat a yes as a change.
+   - a question about the spec: answer from the spec, `idea.md` and the scout files; if they do not cover it, spawn `factory:factory-scout-code` with that one question, save its reply as `JOB/scout-q<k>.md`, and answer from it (at most 3 such scouts per rev). Do not change anything. If the answer shows the spec is wrong or incomplete, propose the change and treat a yes as a change.
    - a change, or answers to open questions: append it to `JOB/spec-feedback.md` under `## Rev <n+1>` in the user's words plus your clarification. Send to the same spec-writer with SendMessage (load it first: `ToolSearch("select:SendMessage")`): "Revise `JOB/spec.md` per `## Rev <n+1>` in `JOB/spec-feedback.md`. Reply with 1 to 3 bullets of what changed." If it is no longer reachable, spawn `factory:factory-spec-writer` again with the same name and prompt plus "the spec and feedback already exist; revise, do not start over". Check the file still has an acceptance criteria section, then show the highlights again.
    - the user pauses: stage stays `spec`, `note` = "spec rev <n> awaiting review". Tell the user `/factory continue <job-id>` resumes.
    - the user drops it: stage `rejected`, `note` = why. Stop.
@@ -194,7 +194,7 @@ End with at most five lines: job id, stage, rounds used, the `note` if any, and 
 
 ## Rules
 - The factory is for code changes only. If the request is for mockups or screenshots of a design, do not start a job: tell the user to make them outside the factory.
-- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. Scouts write only their `scout-*.md`. The only other files you write are `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, and the files `init` creates.
+- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, and the files `init` creates.
 - Never read, print, edit or commit env files or credentials. The only allowed action is the plain copy of env files into the worktree in New job step 4.
 - The only push allowed is the MAIN push in Merge, after a successful merge. Never push a `factory/*` or `needs-human/*` branch, never use `--force`, `--all`, `--tags` or `-u` with another ref, and never push from any other step or agent.
 - Report what happened, including failures and anything agents said they did not verify.
