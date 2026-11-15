@@ -1,6 +1,6 @@
 # Software factory
 
-A portable [Claude Code](https://claude.com/claude-code) setup that turns an idea into reviewed, merged code. You describe an idea and talk it through with the factory first; then a team of specialised agents writes the spec, builds it on a branch, reviews it, and either merges it or hands it back to you.
+A portable [Claude Code](https://claude.com/claude-code) setup that turns an idea into reviewed, merged code. You describe an idea; scouts research the codebase, a spec-writer drafts a spec you iterate on until it's right, then a team of specialised agents builds it on a branch, reviews it, and either merges it or hands it back to you.
 
 Installed once as a Claude Code plugin (agents plus one skill). Everything the factory writes (project config, job state, worktrees) lives in `~/.claude/factory/<project>/`, not in your repo.
 
@@ -9,18 +9,23 @@ Installed once as a Claude Code plugin (agents plus one skill). Everything the f
 One AI agent writing and judging its own code is unreliable. The factory splits the work across agents with narrow jobs, and keeps a human in control of anything risky:
 
 ```
+                             │ /factory <idea>
+                             ▼
                    ┌──────────────────┐
-                   │   orchestrator   │
-                   │    (idea chat)   │
-                   │  asks you if the │
-                   │ task is unclear  │
+                   │  scouts: code +  │
+                   │  1 per source    │
+                   └─────────┬────────┘
+                             ▼ scout-*.md
+                   ┌──────────────────┐
+                   │   spec-writer    │◄─┐ your changes
+                   │       opus       │  │ or answers
+                   └─────────┬────────┘  │
+                             ▼           │
+                   ┌──────────────────┐  │
+                   │   spec review    ├──┘
+                   │ orchestrator+you │
                    └─────────┬────────┘
                              ▼ you say go
-                   ┌──────────────────┐
-                   │   spec-writer    │
-                   │       opus       │
-                   └─────────┬────────┘
-                             ▼
                    ┌──────────────────┐
                    │     builder      │◄───────────────────┐
                    │       opus       │                    │
@@ -60,7 +65,9 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
 
 | Agent | Job |
 |---|---|
-| `spec-writer` | Turns the request into a short spec with testable acceptance criteria |
+| `scout-code` | Researches the code and project docs (current behaviour, patterns to copy, tests, data) and writes one file with file:line references. Sonnet |
+| `scout-source` | One per knowledge source in `project.md` (notes folder, Slack, Jira…): searches it for earlier decisions and requirements. Haiku |
+| `spec-writer` | Turns the request and the scout findings into a short spec with testable acceptance criteria |
 | `builder` | Implements the spec on its own branch and worktree, writes tests, runs the checks |
 | `review-code` | Checks correctness, conventions and tests; the only reviewer that runs the test suite |
 | `review-ux` | Checks the flow and visual consistency, in a real browser (only when UI files changed) |
@@ -73,7 +80,7 @@ Key properties:
 - **Independent review.** Reviewers run in parallel, only read the diff, and cannot edit code. If any asks for changes, the same builder fixes them, up to two rounds.
 - **Humans decide the risky bits.** The approver escalates schema changes, new dependencies, build/infra changes, data deletion, unmet or unchecked acceptance criteria, and anything it is unsure about.
 - **Safe git.** Only an approved merge lands on your main branch, and only the main branch is ever pushed. Never `--force`, never a `factory/*` or `needs-human/*` branch. Env files are copied into worktrees but never read or committed.
-- **Idea first.** Before any spec, the orchestrator talks the idea through with you: it asks only what the code can't answer, proposes one small scope, and writes `idea.md`. Work starts when you say go.
+- **You own the spec.** After the first draft you see its highlights (goal, acceptance criteria, decisions, open questions) and a link to the full `spec.md`. Ask questions or request changes; the spec-writer revises and you see what changed, for as many rounds as it takes. Building starts only when you say go.
 - **Everything is files.** Ideas, specs, build notes, reviews and decisions live in `~/.claude/factory/<project>/jobs/<job-id>/`, and `board.json` there tracks job state.
 
 ## Setup
@@ -81,7 +88,7 @@ Key properties:
 Requirements: `git`, a main branch (`main` or similar), and [`playwright-cli`](https://github.com/microsoft/playwright-cli) if your app has a UI (used for browser checks).
 
 1. Install the plugin: `/plugin marketplace add mikkoryynanen/software-factory`, then `/plugin install factory@software-factory`.
-2. Open Claude Code in your target repo and run `/factory init`. It surveys the repo (docs, package manager, CI, tests, UI code) and drafts `project.md` in `~/.claude/factory/<project>/`: check commands, conventions, which paths trigger which reviewer, what to escalate, how to run the app. It asks only what it cannot infer, and you confirm the draft before anything is written.
+2. Open Claude Code in your target repo and run `/factory init`. It surveys the repo (docs, package manager, CI, tests, UI code) and drafts `project.md` in `~/.claude/factory/<project>/`: check commands, conventions, which paths trigger which reviewer, what to escalate, how to run the app. It asks only what it cannot infer, then offers to add knowledge sources outside the repo (a notes folder, Slack, Jira, Confluence) for the source scouts, including the read-only permissions they need. You confirm the draft and any settings change before anything is written.
 3. Dry run with a tiny idea: `/factory --hold <a tiny idea>`.
 
 ### Updating
@@ -104,10 +111,10 @@ Your projects need nothing else: `~/.claude/factory/<project>/` is picked up as 
 
 | Command | What it does |
 |---|---|
-| `/factory <idea>` | Talk the idea through, then run a new job end to end |
+| `/factory <idea>` | Scout, spec it with you, then run a new job end to end |
 | `/factory --hold <idea>` | Same, but stop after approval so you can test the branch before merging |
-| `/factory next` | Take the first unchecked item in `backlog.md` and run it (it starts with the idea chat too) |
-| `/factory continue <job-id>` | Resume an idea chat you paused |
+| `/factory next` | Take the first unchecked item in `backlog.md` and run it (it starts with the spec review too) |
+| `/factory continue <job-id>` | Resume a spec review you paused |
 | `/factory run <job-id>` | Serve a `needs-human` job's branch locally, open it, and print its test steps |
 | `/factory stop [<job-id>]` | Stop that job's review server, or all of them |
 | `/factory approve <job-id>` | Merge a job that is waiting on you (`needs-human`), including commits you added to its branch |
@@ -119,7 +126,7 @@ Your projects need nothing else: `~/.claude/factory/<project>/` is picked up as 
 Typical flow:
 
 1. `/factory add bulk paste to the import dialog`
-2. Answer the factory's few questions and say go. Watch it spec, build and review. At the end you get at most five lines: job id, stage, rounds used, a note, and the next command.
+2. Review the spec highlights, answer its open questions, ask or request changes until it's right, and say go again. Watch it build and review. At the end you get at most five lines: job id, stage, rounds used, a note, and the next command.
 3. If the job is `needs-human`, read `test.md`, then either `/factory run <job-id>` to try it in the browser or `git switch needs-human/<job-id>` to review and edit it in your own checkout. Finish with `/factory approve <job-id>`, `/factory rework <job-id> <what to change>` or `/factory reject <job-id>`.
 
 ## Configuring for your project
@@ -131,7 +138,7 @@ Typical flow:
 ```
 this repo (the plugin)
   .claude-plugin/         plugin.json and marketplace.json
-  agents/factory-*.md     the six agents above
+  agents/factory-*.md     the eight agents above
   skills/factory/
     SKILL.md              the orchestrator: the /factory command and the loop
     project-template.md   template for project.md
@@ -142,7 +149,7 @@ this repo (the plugin)
     project.md            your project config
     board.json            job state
     backlog.md            queue for `/factory next`
-    jobs/<job-id>/        idea.md, spec.md, build.md, round-N/review-*.md, decision.md, test.md, server.log
+    jobs/<job-id>/        idea.md, scout-*.md, spec.md, spec-feedback.md, build.md, round-N/review-*.md, decision.md, test.md, server.log
     worktrees/<job-id>/   one git worktree per running job
 ```
 

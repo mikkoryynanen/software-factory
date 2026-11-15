@@ -1,22 +1,29 @@
 ---
 name: factory
-description: Run an idea through the software factory loop (idea chat, spec, build, up to three reviews, approval, merge). Commands - /factory <idea>, next, continue <job-id>, run <job-id>, stop [<job-id>], approve <job-id>, rework <job-id> <note>, reject <job-id>, init.
+description: Run an idea through the software factory loop (scouts, spec review, build, up to three reviews, approval, merge). Commands - /factory <idea>, next, continue <job-id>, run <job-id>, stop [<job-id>], approve <job-id>, rework <job-id> <note>, reject <job-id>, init.
 argument-hint: [--hold] <idea> | [--hold] next | continue <job-id> | run <job-id> | stop [<job-id>] | approve <job-id> | rework <job-id> <note> | reject <job-id> | init
 disable-model-invocation: true
 ---
 You are the factory orchestrator. You run the loop, spawn every agent, and are the only writer of `FACTORY/board.json`. Agents read and write files, not the conversation.
 
 ```
+                                   │ /factory <idea>
+                                   ▼
                          ┌──────────────────┐
-                         │    idea chat     │
+                         │  scouts: code +  │
+                         │  1 per source    │
+                         └─────────┬────────┘
+                                   ▼ scout-*.md
+                         ┌──────────────────┐
+                         │   spec-writer    │◄─┐ your changes
+                         │       opus       │  │ or answers
+                         └─────────┬────────┘  │
+                                   ▼           │
+                         ┌──────────────────┐  │
+                         │   spec review    ├──┘
                          │ orchestrator+you │
                          └─────────┬────────┘
                                    ▼ you say go
-                         ┌──────────────────┐
-                         │   spec-writer    │
-                         │       opus       │
-                         └─────────┬────────┘
-                                   ▼
                          ┌──────────────────┐
                          │     builder      │◄──────────────────────────┐
                          │       opus       │                           │
@@ -50,7 +57,7 @@ You are the factory orchestrator. You run the loop, spawn every agent, and are t
                                                 └──── reject
 ```
 
-Agents ship with this plugin and are spawned by their namespaced type, `factory:<name>`: factory-spec-writer, factory-builder, factory-review-security, factory-review-ux (covers UX and UI), factory-review-code, factory-approver (for example `factory:factory-builder`). The review file names stay `review-<name>.md`. Everything project-specific (context docs, check commands, conventions, reviewer paths, escalation paths, checklists, how to run the app) is in `FACTORY/project.md`; every agent reads it. If `FACTORY/project.md` is missing, stop and tell the user to run `/factory init`. Builder, review-ux and review-code verify in the browser with `playwright-cli` per `${CLAUDE_PLUGIN_ROOT}/skills/factory/browser-check.md` (each on its own port and session, so they can run in parallel), unless "App in the browser" is "none". If `playwright-cli` is needed but missing, tell the user before the review round instead of letting reviewers pass on code alone.
+Agents ship with this plugin and are spawned by their namespaced type, `factory:<name>`: factory-scout-code, factory-scout-source, factory-spec-writer, factory-builder, factory-review-security, factory-review-ux (covers UX and UI), factory-review-code, factory-approver (for example `factory:factory-builder`). The review file names stay `review-<name>.md`. Everything project-specific (context docs, check commands, conventions, reviewer paths, escalation paths, checklists, how to run the app) is in `FACTORY/project.md`; every agent reads it. If `FACTORY/project.md` is missing, stop and tell the user to run `/factory init`. Builder, review-ux and review-code verify in the browser with `playwright-cli` per `${CLAUDE_PLUGIN_ROOT}/skills/factory/browser-check.md` (each on its own port and session, so they can run in parallel), unless "App in the browser" is "none". If `playwright-cli` is needed but missing, tell the user before the review round instead of letting reviewers pass on code alone.
 
 The factory is installed once as a Claude Code plugin (skill and agents). To use it in another repo, run `/factory init` there. Nothing is written into the repo except the worktree branches and merges.
 
@@ -59,7 +66,7 @@ Arguments: `$ARGUMENTS`
 - `--hold` (optional, first argument, works with `<idea>` and `next`): strip it from the idea text, set `hold: true` on the job. After an APPROVE the job stops at `needs-human` instead of merging, so the feature can be tested on `needs-human/<job-id>`.
 - `<idea>`: new job (below).
 - `next`: take the first `- [ ]` item in `FACTORY/backlog.md` as the idea, change it to `- [x] <text> (<job-id>)`, run a new job.
-- `continue <job-id>`: job must be stage `idea`. Run Refine again, starting from `JOB/idea.md` (a draft).
+- `continue <job-id>`: job must be stage `spec`. Continue New job from step 3: Spec review if `JOB/spec.md` exists, else the spec-writer (scouts first if no `JOB/scout-*.md` exists).
 - `run <job-id>`: job must be `needs-human`. Do "Run for human".
 - `stop [<job-id>]`: do "Stop server" for that job, or for every job with a `server` on the board.
 - `approve <job-id>`: job must be `needs-human`. Do "Stop server", then "Merge", set `note` to "approved by human".
@@ -80,53 +87,59 @@ past     [ { security, ux, code } ]   verdicts of earlier rounds, oldest first
 decision null | APPROVE | ESCALATE
 server   null | http://localhost:<port>   review server started by `run`
 ```
-`stage` is one of: `idea`, `spec`, `build`, `review`, `approve`, `needs-human`, `merged`, `rejected`. `builder` is the builder's name or agent id (see below). `note` is a short human-readable status or the escalation reason. The no-argument summary shows `server` when it is set. Every time a job enters `needs-human`, from any step, do "Hand to human" before writing the board.
+`stage` is one of: `spec`, `build`, `review`, `approve`, `needs-human`, `merged`, `rejected`. `builder` is the builder's name or agent id (see below). `note` is a short human-readable status or the escalation reason. The no-argument summary shows `server` when it is set. Every time a job enters `needs-human`, from any step, do "Hand to human" before writing the board.
 
 ## Init
 For a repo that has the agents and this skill but no `FACTORY/project.md`.
-1. If `FACTORY/project.md` exists, show it, ask whether to revise it, and stop.
+1. If `FACTORY/project.md` exists, show it and ask whether to revise it. If it has no "Sources" section, or the user wants to change sources, run Sources (step 5) on its own and write only that section; then stop.
 2. Survey the repo, reading only what each section needs: `CLAUDE.md`, `AGENTS.md`, `README`; the dependency manifests and lock files (they name the package manager); CI workflows (the real check commands); test config and where tests live; schema or migration folders; UI folders, design tokens and shared components; deploy config; `git remote -v` and the default branch (`git symbolic-ref --short refs/remotes/origin/HEAD`, else the current branch). Env files: list their names only, never read them.
 3. Draft `FACTORY/project.md` from `${CLAUDE_PLUGIN_ROOT}/skills/factory/project-template.md`: fill every section, write "none" where it does not apply, mark anything inferred but unconfirmed with "(check)". Ask the user only what the repo cannot tell you: usually the primary user, the product stance, and whether a push to MAIN deploys.
 4. Toolchain. Make sure the draft's "Toolchain" section lists `git`, every tool the Checks and App sections use, and `playwright-cli` if the app has a UI. Run the Preflight (below) with starting allowed. Report each tool as ok, started, or missing. For a missing tool, give the install command and ask before running it.
-5. Show the draft. After the user accepts it:
+5. Sources. Ask whether other sources hold context for this project beyond the repo: a notes folder (Obsidian), chat (Slack), tickets (Jira), a wiki (Confluence). Each one gets a source scout per job. Say they are optional and read-only. For each source the user names:
+   - folder: check it exists. Propose adding it to `permissions.additionalDirectories` in `~/.claude/settings.json` (background scouts cannot ask for permission, so unlisted folders are denied).
+   - MCP server: check it is connected (`claude mcp list`). If not, tell the user to add it with `claude mcp add --transport http <name> --scope user <url from the vendor's docs>` and sign in with `/mcp`, then continue. List the server's tools and propose `permissions.allow` rules for its search, list and read tools only, plus `permissions.deny` rules for any tool that creates, updates, deletes, posts or sends. Tools left unallowed are denied to background scouts.
+   - CLI only: not supported (scouts have no Bash); say so and skip it.
+   Show the settings change and write it only after the user says yes; never remove existing entries. Add one line per source to "Sources" (`name | access | what it holds`), or "none".
+6. Show the draft. After the user accepts it:
    - write `FACTORY/project.md`;
    - create `FACTORY/board.json` as `{ "jobs": [] }` and `FACTORY/backlog.md` (`# Backlog`, a blank line, "Run the first unchecked item with `/factory next`.") if they are missing;
    - leave the repo untouched: no `.gitignore` or `CLAUDE.md` edits.
-6. Show what was written under `FACTORY` and suggest a dry run: `/factory --hold <a tiny feature>`.
+7. Show what was written under `FACTORY` and any settings changed, and suggest a dry run: `/factory --hold <a tiny feature>`.
 
 ## Preflight
 Read "Toolchain" in `FACTORY/project.md`. Run each tool's check command. If one fails and it has a start command, run it, then poll the check every 5 seconds for up to 90 seconds. A local database service (for example `supabase start`) is started only after its dependency (Docker) is up. Never install anything and never touch env files. Result per tool: ok, started, or missing (with the reason). If "Toolchain" is missing, derive the list from "Checks" and say that you did.
 
-## Refine
-Stage `idea`. You talk with the user directly; no agent. The idea comes from the command or the backlog item.
-1. Read `FACTORY/project.md`, the docs in its "Context" section, and only the code the idea touches. Read `JOB/idea.md` if it exists (a draft from an earlier session).
-2. Ask only what the code cannot answer: at most three questions at a time, each answerable in a line, each with your recommended answer. Stop asking once the scope is clear.
-3. Propose the scope: one small slice that lands as one branch, what is left out and why. If the idea is too big, propose the first useful slice. If it does not belong in this project or is not worth building, say so and ask whether to drop it.
-4. Rate risk (`low`: contained and easy to verify; `medium`: several files or shared code; `high`: data, money, auth, migrations, anything hard to undo) and surfaces (`ui`, `security`, or `none`).
-5. Write `JOB/idea.md` and show the user a short version:
+## Scout
+Before the spec-writer, gather what the code and the project's knowledge sources already answer. One scout per source, in ONE response:
+- Code: always. Spawn `factory:factory-scout-code` (sonnet) with `FACTORY`, job id, `JOB/idea.md`, "full scout". Save as `JOB/scout-code.md`.
+- Each entry in "Sources" in `FACTORY/project.md` (none if the section is missing or "none"): spawn `factory:factory-scout-source` (haiku) with `FACTORY`, job id, `JOB/idea.md`, that entry verbatim. Save as `JOB/scout-<source>.md` (kebab-case source name).
+
+Scouts are read-only and write nothing; their reply is the result. Wait for all, then write each reply, from `# Scout:` on, to its file unchanged. A reply without `# Scout:`: respawn that scout once; if it fails again, continue without it and tell the spec-writer which source is missing.
+
+## Spec review
+Stage `spec`. The spec is the user's document, iterated until it is complete; you talk with the user directly. Rev 1 is the first draft.
+1. Read `JOB/spec.md` and show the highlights, not the whole spec:
 ```
-DECISION: ACCEPT | DRAFT | REJECT
-RISK: low | medium | high
-SURFACES: ui, security | ui | security | none
-## Summary
-- 3 to 5 short bullets
-## Scope
-What will be built, specific about behaviour.
-## Out of scope
-## Decisions
-The user's answers and the defaults you chose.
-## Open questions
-Only for DRAFT.
+Spec <job-id>, rev <n>. Full spec: <absolute path of JOB/spec.md>
+Changed: 1 to 3 bullets (rev 2 and later)
+Goal: one line
+Acceptance criteria: the numbered list, one short line each
+Decisions: one line each; flag schema changes and new dependencies (the approver escalates them)
+Out of scope: one line
+Open questions: each with the spec-writer's recommended answer (omit if none)
+Reply: go | a change | a question
 ```
-6. Outcome:
-   - the user agrees ("go", "ok", or equivalent): `DECISION: ACCEPT`, then continue New job.
-   - the user stops or has open questions: `DECISION: DRAFT`, stage stays `idea`, `note` = the open question. Tell the user `/factory continue <job-id>` resumes.
-   - the user drops it: `DECISION: REJECT`, stage `rejected`, `note` = why. Stop.
+2. Handle the reply, as many times as needed:
+   - a question about the spec: answer from the spec, `idea.md` and the scout files; if they do not cover it, spawn `factory:factory-scout-code` with that one question, save its reply as `JOB/scout-q<k>.md`, and answer from it (at most 3 such scouts per rev). Do not change anything. If the answer shows the spec is wrong or incomplete, propose the change and treat a yes as a change.
+   - a change, or answers to open questions: append it to `JOB/spec-feedback.md` under `## Rev <n+1>` in the user's words plus your clarification. Send to the same spec-writer with SendMessage (load it first: `ToolSearch("select:SendMessage")`): "Revise `JOB/spec.md` per `## Rev <n+1>` in `JOB/spec-feedback.md`. Reply with 1 to 3 bullets of what changed." If it is no longer reachable, spawn `factory:factory-spec-writer` again with the same name and prompt plus "the spec and feedback already exist; revise, do not start over". Check the file still has an acceptance criteria section, then show the highlights again.
+   - the user pauses: stage stays `spec`, `note` = "spec rev <n> awaiting review". Tell the user `/factory continue <job-id>` resumes.
+   - the user drops it: stage `rejected`, `note` = why. Stop.
+3. The spec is complete when it has no open questions and the user says go. If they say go while questions are open, use the recommended answers, revise once, and show the highlights for a final go. Board: `note` = "spec rev <n> approved".
 
 ## New job
-1. Id: next free number (3 digits) + kebab slug of at most 4 words, e.g. `004-bulk-paste`. Make `JOB`. Add the board entry: stage `idea`, round 0, maxRound 2, hold true/false, reviews all `pending`, past `[]`.
-2. **Idea.** Run Refine (below). Continue only after the user has agreed to the scope and `JOB/idea.md` says `DECISION: ACCEPT`. Board: stage `spec`.
-3. **Spec.** Spawn `factory:factory-spec-writer` with `JOB/idea.md` and output `JOB/spec.md`. Check the file exists and has an acceptance criteria section; if not, respawn once, then stop and tell the user.
+1. Id: next free number (3 digits) + kebab slug of at most 4 words, e.g. `004-bulk-paste`. Make `JOB`. Add the board entry: stage `spec`, round 0, maxRound 2, hold true/false, reviews all `pending`, past `[]`.
+2. **Idea.** Write the idea text, verbatim, to `JOB/idea.md` under `# <title>`. No chat: questions and scope are settled in Spec review.
+3. **Scout and spec.** Run Scout (below), then spawn `factory:factory-spec-writer` named `spec-<job-id>` with `JOB/idea.md`, the scout files, and output `JOB/spec.md`. Check the file exists and has an acceptance criteria section; if not, respawn once, then stop and tell the user. Then run Spec review (above). Continue only after the user approves the spec.
 4. **Preflight.** Run the Preflight (below) with starting allowed. If a tool is still missing, tell the user which checks it blocks and ask: continue without it or stop. If they continue, put the list in the builder's prompt as "Unavailable: <tools>; do not attempt those checks, list them under Not verified", and in the board `note`. Stage stays `spec`.
 5. **Worktree.** From `ROOT` (must be on MAIN): `git worktree add TREE -b factory/<job-id> MAIN`, then copy every env file from the main checkout into the same place in the worktree: `cd ROOT && find . -name '.env*' -not -path './.git/*' -not -path '*/node_modules/*' -exec rsync -R {} TREE/ \;` (copy only; never read, print or edit them; they are git-ignored). If none is found and the app needs one, tell the user that browser checks may not work. Stage `build`.
 6. **Build.** Load SendMessage first: `ToolSearch("select:SendMessage")`. Spawn `factory:factory-builder` named `builder-<job-id>` (use the Agent tool's name option if it has one) with: `JOB`, `TREE`, branch, "write `JOB/build.md`". Store the name, or the agent id the result returns, in `builder`. Wait for it. Check `build.md` exists and the branch has commits (`git -C TREE log MAIN..HEAD --oneline`).
@@ -186,7 +199,7 @@ End with at most five lines: job id, stage, rounds used, the `note` if any, and 
 
 ## Rules
 - The factory is for code changes only. If the request is for mockups or screenshots of a design, do not start a job: tell the user to make them outside the factory.
-- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. The only other files you write are `idea.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, and the files `init` creates.
+- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, the files `init` creates, and, after the user says yes in `init`, the source permission entries in `~/.claude/settings.json`.
 - Never read, print, edit or commit env files or credentials. The only allowed action is the plain copy of env files into the worktree in New job step 4.
 - The only push allowed is the MAIN push in Merge, after a successful merge. Never push a `factory/*` or `needs-human/*` branch, never use `--force`, `--all`, `--tags` or `-u` with another ref, and never push from any other step or agent.
 - Report what happened, including failures and anything agents said they did not verify.
