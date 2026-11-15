@@ -12,8 +12,8 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
                              │ /factory <idea>
                              ▼
                    ┌──────────────────┐
-                   │  scouts (2 to 4) │
-                   │  haiku, parallel │
+                   │  scouts: code +  │
+                   │  1 per source    │
                    └─────────┬────────┘
                              ▼ scout-*.md
                    ┌──────────────────┐
@@ -65,7 +65,8 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
 
 | Agent | Job |
 |---|---|
-| `scout` | Answers one question about the code and docs (current behaviour, patterns to copy, tests, data) in a short file; several run in parallel on Haiku |
+| `scout-code` | Researches the code and project docs (current behaviour, patterns to copy, tests, data) and writes one file with file:line references. Sonnet |
+| `scout-source` | One per knowledge source in `project.md` (notes folder, Slack, Jira…): searches it for earlier decisions and requirements. Haiku |
 | `spec-writer` | Turns the request and the scout findings into a short spec with testable acceptance criteria |
 | `builder` | Implements the spec on its own branch and worktree, writes tests, runs the checks |
 | `review-code` | Checks correctness, conventions and tests; the only reviewer that runs the test suite |
@@ -137,7 +138,7 @@ Typical flow:
 ```
 this repo (the plugin)
   .claude-plugin/         plugin.json and marketplace.json
-  agents/factory-*.md     the seven agents above
+  agents/factory-*.md     the eight agents above
   skills/factory/
     SKILL.md              the orchestrator: the /factory command and the loop
     project-template.md   template for project.md

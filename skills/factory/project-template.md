@@ -5,6 +5,9 @@ Facts the factory needs about this repo. Every factory agent reads this file; th
 ## Context
 Docs every agent reads first (usually `CLAUDE.md`), and docs only the spec-writer also reads (product plan, scope).
 
+## Sources
+Knowledge sources outside the repo, one source scout each per job. One line per source: `name | access | what it holds`. Access is a folder path (read with Read and Grep) or the MCP server whose tools search it. Example: `obsidian | ~/Notes/Work | meeting notes, decisions`, `jira | MCP atlassian | tickets for project CRON`. "none" if there are none; the code scout always runs.
+
 ## Branch and push
 Main branch name. Whether to push after a merge, and the exact command (normally `git push origin <main>`). What a push triggers (deploy, CI).
 
