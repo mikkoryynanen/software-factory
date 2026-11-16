@@ -27,10 +27,13 @@ Path prefixes that trigger `review-ux` (UI code, styles). Path prefixes that tri
 Project paths behind the approver's escalation categories: schema and migration paths, access-control policies, dependency manifests and lock files, build and infra config.
 
 ## Security checklist
-What the security reviewer looks for in this app: untrusted input sources, data access and authorization model, key handling, delete rules.
+What the security reviewer looks for in this app: untrusted input sources, data access and authorization model, key handling, delete rules. Accepted risks: known gaps the owner accepts (for example "admin revocation takes up to 15 minutes"), so reviewers do not re-raise them.
 
 ## UX checklist
 Primary user and their main task. Product stance (what the app must not do). Design system, where the tokens live, and the shared components new UI should reuse. Viewports to check, and whether dark mode exists.
+
+## Data
+Whether the database holds real data that migrations must keep. Throwaway DB command: how to get a disposable copy of the database (or back it up) before testing a schema change. Real-config run: how to run the app with the real env (for example a real identity provider), and who does it (agents cannot read env files).
 
 ## App in the browser
 "none" if there is no UI. Otherwise: serve command (it takes `--port <port>`), how an agent signs in (signup flow, throwaway account), where the data lives (shared or local), and quirks (slow fonts, seed data needed first).
