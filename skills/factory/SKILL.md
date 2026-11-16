@@ -194,12 +194,15 @@ Before the builder resumes, bring the user's commits into the agent branch and r
 2. If it has commits not on `factory/<job-id>`: `git -C TREE merge --no-ff needs-human/<job-id> -m "Merge human changes into factory/<job-id>"`. On conflict, `git -C TREE merge --abort` and stop with the reason.
 3. Confirm `git merge-base --is-ancestor needs-human/<job-id> factory/<job-id>`, then `git branch -D needs-human/<job-id>` (safe: its commits are on the agent branch). Delete `JOB/test.md`; the next escalation writes a new one.
 
+## Follow-ups
+When a job reaches `needs-human` or `merged`, read the `Notes` of every review file in its round folders. For each note that defers work (names a later job, says "follow-up", "later", "next job"), append `- [ ] <the note, one line> (from <job-id>)` to `FACTORY/backlog.md`, skipping ones already there. List what you added in Finish.
+
 ## Finish
 End with at most five lines: job id, stage, rounds used, the `note` if any, and the next command the user may want. For needs-human: `/factory run <id>` (or `git switch needs-human/<id>`), then `/factory approve|rework|reject <id>`.
 
 ## Rules
 - The factory is for code changes only. If the request is for mockups or screenshots of a design, do not start a job: tell the user to make them outside the factory.
-- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, the files `init` creates, and, after the user says yes in `init`, the source permission entries in `~/.claude/settings.json`.
+- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, `backlog.md` (in `next` and Follow-ups), the files `init` creates, and, after the user says yes in `init`, the source permission entries in `~/.claude/settings.json`.
 - Never read, print, edit or commit env files or credentials. The only allowed action is the plain copy of env files into the worktree in New job step 4.
 - The only push allowed is the MAIN push in Merge, after a successful merge. Never push a `factory/*` or `needs-human/*` branch, never use `--force`, `--all`, `--tags` or `-u` with another ref, and never push from any other step or agent.
 - Report what happened, including failures and anything agents said they did not verify.
