@@ -58,7 +58,7 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
                      └── /factory approve ── you ── /factory rework ─► builder
 ```
 
-- `review-code` always runs. `review-ux` runs only if the diff touches a UX path, `review-security` only if it touches a security path (both lists are in `project.md`).
+- `review-code` and `review-security` always run. `review-ux` runs only if the diff touches a UX path (listed in `project.md`).
 - If CHANGES remain after the second round, the job goes to `needs-human` instead of looping again.
 - When a job needs you, the factory creates a local `needs-human/<job-id>` branch and a `test.md` with what to check. `/factory run <job-id>` serves it on a free port; or check the branch out yourself.
 - With `--hold`, an APPROVE also stops at `needs-human` so you can test the branch before merging.
@@ -71,7 +71,7 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
 | `builder` | Implements the spec on its own branch and worktree, writes tests, runs the checks |
 | `review-code` | Checks correctness, conventions and tests; the only reviewer that runs the test suite |
 | `review-ux` | Checks the flow and visual consistency, in a real browser (only when UI files changed) |
-| `review-security` | Checks the diff for security problems (only when sensitive paths changed) |
+| `review-security` | Checks the diff for security problems, including the OWASP Top 10 |
 | `approver` | Final gate: `APPROVE` (merge) or `ESCALATE` (needs you) |
 
 Key properties:
@@ -88,7 +88,7 @@ Key properties:
 Requirements: `git`, a main branch (`main` or similar), and [`playwright-cli`](https://github.com/microsoft/playwright-cli) if your app has a UI (used for browser checks).
 
 1. Install the plugin: `/plugin marketplace add mikkoryynanen/software-factory`, then `/plugin install factory@software-factory`.
-2. Open Claude Code in your target repo and run `/factory init`. It surveys the repo (docs, package manager, CI, tests, UI code) and drafts `project.md` in `~/.claude/factory/<project>/`: check commands, conventions, which paths trigger which reviewer, what to escalate, how to run the app. It asks only what it cannot infer, then offers to add knowledge sources outside the repo (a notes folder, Slack, Jira, Confluence) for the source scouts, including the read-only permissions they need. You confirm the draft and any settings change before anything is written.
+2. Open Claude Code in your target repo and run `/factory init`. It surveys the repo (docs, package manager, CI, tests, UI code) and drafts `project.md` in `~/.claude/factory/<project>/`: check commands, conventions, which paths trigger the UX reviewer, what to escalate, how to run the app. It asks only what it cannot infer, then offers to add knowledge sources outside the repo (a notes folder, Slack, Jira, Confluence) for the source scouts, including the read-only permissions they need. You confirm the draft and any settings change before anything is written.
 3. Dry run with a tiny idea: `/factory --hold <a tiny idea>`.
 
 ### Updating

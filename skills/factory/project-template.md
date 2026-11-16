@@ -21,7 +21,7 @@ One line per tool the Checks and App sections need: `name | check command | star
 Rules the code reviewer checks beyond "match the surrounding code": data rules, framework rules, required tests for schema changes, comment policy.
 
 ## Reviewer selection
-Path prefixes that trigger `review-ux` (UI code, styles). Path prefixes that trigger `review-security` (data access, IO, auth, schema, dependency manifests and lock files). `review-code` always runs.
+Path prefixes that trigger `review-ux` (UI code, styles). `review-code` and `review-security` always run.
 
 ## Escalate
 Project paths behind the approver's escalation categories: schema and migration paths, access-control policies, dependency manifests and lock files, build and infra config.

@@ -150,7 +150,7 @@ Reply: go | a change | a question
 2. Choose reviewers from `git -C TREE diff --name-only MAIN...HEAD` and the "Reviewer selection" section of `FACTORY/project.md`:
    - `review-code`: always.
    - `review-ux`: only if the diff touches a UX path.
-   - `review-security`: only if the diff touches a security path.
+   - `review-security`: always.
    Set the unchosen ones to `skipped` on the board. In ONE response, spawn the chosen reviewers (agents `factory:factory-review-code`, `factory:factory-review-ux`, `factory:factory-review-security`). Each prompt: `JOB`, `TREE`, branch, round folder, its own output path `JOB/round-n/review-<name>.md` (names: security, ux, code).
 3. As each reviewer finishes, read the first line of its file and set that verdict on the board (`VERDICT: PASS` -> `PASS`, `VERDICT: CHANGES` -> `CHANGES`). A missing file or a bad first line: respawn that one reviewer once; if it fails again, mark the job `needs-human` with the reason.
 4. **WAIT FOR ALL** chosen reviewers, with no per-reviewer acknowledgement turns. The round is done only when every chosen file exists with a valid verdict. Never resume the builder, or decide anything, before that.
