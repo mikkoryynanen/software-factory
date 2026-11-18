@@ -17,7 +17,8 @@ Keep it under one page. Use exactly these sections:
 - `## Current state`: 3 to 6 bullets on how things work today and which existing pattern this follows, with file references. Drawn from the scouts; include relevant earlier decisions from the source scouts.
 - `## Behaviour`: short bullets, including empty and error states.
 - `## Acceptance criteria`: numbered, each one observable and testable (a unit test as described in "Checks", or a concrete thing to see in the browser). The builder tests against these and the reviewers check them.
-- `## Affected modules`: files that will change.
+- `## Affected modules`: the files that will change, each by path, not areas. The orchestrator checks the diff against this list.
+- `## Design`: at most 10 lines. The data shape first (types, tables, state), then the approach, then the existing feature to copy (from "Patterns" in `scout-code.md`).
 - `## Out of scope`: what this job must not do.
 - `## Decisions`: material choices you made by default (data model, schema change, new dependency, architecture). Say "none" if none. A schema change or a new dependency must be called out here, because the approver escalates those to the human.
 - `## Open questions`: before writing them, if the job touches auth, sessions, user data or secrets, check the spec covers: how fast revocation (logout, admin removal, role change) takes effect; what the UI, errors and logs disclose; secrets and credentials at rest; leftover or obsolete data and columns; existing real data (see "Data" in `<factory>/project.md`). Add an acceptance criterion or an open question for each gap. Do not ask what `<factory>/project.md` already answers (real data, runtime versions, dependency policy). Only what the idea, docs and code cannot answer and that would change the acceptance criteria. Each answerable in a line, with your recommended answer, which the spec already follows. Say "none" if none.

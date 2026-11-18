@@ -28,6 +28,11 @@ You are the factory orchestrator. You run the loop, spawn every agent, and are t
                          │   builder r<n>   │◄──────────────────────────┐
                          │       opus       │                           │
                          └─────────┬────────┘                           │
+                                   ▼                                    │
+                         ┌──────────────────┐                           │
+                         │   scope check    │                           │
+                         │   → scope.md     │                           │
+                         └─────────┬────────┘                           │
               ┌────────────────────┼────────────────────┐               │
               ▼                    ▼                    ▼               │
         ┌───────────┐        ┌───────────┐        ┌───────────┐         │
@@ -129,6 +134,7 @@ Spec <job-id>, rev <n>. Full spec: <absolute path of JOB/spec.md>
 Changed: 1 to 3 bullets (rev 2 and later)
 Goal: one line
 Acceptance criteria: the numbered list, one short line each
+Design: one line
 Decisions: one line each; flag schema changes and new dependencies (the approver escalates them)
 Out of scope: one line
 Open questions: each with the spec-writer's recommended answer (omit if none)
@@ -150,8 +156,14 @@ Reply: go | a change | a question
 6. **Build.** Spawn `factory:factory-builder` named `builder-<job-id>-r1` (use the Agent tool's name option if it has one) with: `JOB`, `TREE`, branch, "write `JOB/build.md`". Store the name, or the agent id the result returns, in `builder`. Wait for it. Check `build.md` exists and the branch has commits (`git -C TREE log MAIN..HEAD --oneline`).
 7. **Review round** (below), starting at round 1.
 
+## Scope check
+Run after each builder finishes, before the reviewers start.
+1. Take `git -C TREE diff --name-only MAIN...HEAD` and leave out test files that match the pattern in "Checks".
+2. Compare the rest with "Affected modules" in `JOB/spec.md`.
+3. List each other file that the Decisions in `JOB/build.md` do not explain in `JOB/round-n/scope.md`, one per line. Write nothing if there are none.
+
 ## Review round n
-1. `mkdir JOB/round-n`. Board: stage `review`, round n, reviews all `pending`.
+1. `mkdir JOB/round-n`. Board: stage `review`, round n, reviews all `pending`. Run Scope check.
 2. Choose reviewers from `git -C TREE diff --name-only MAIN...HEAD` and the "Reviewer selection" section of `FACTORY/project.md`:
    - `review-code`: always.
    - `review-ux`: only if the diff touches a UX path.
@@ -225,7 +237,7 @@ End with at most five lines: job id, stage, rounds used, the `note` if any, and 
 
 ## Rules
 - The factory is for code changes only. If the request is for mockups or screenshots of a design, do not start a job: tell the user to make them outside the factory.
-- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the verifier writes only `verified.md`; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, `backlog.md` (in `next`, Follow-ups and Learn), `learnings.md` (in Learn), the files `init` creates, and, after the user says yes in `init`, the source permission entries in `~/.claude/settings.json`.
+- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the verifier writes only `verified.md`; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `scope.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, `backlog.md` (in `next`, Follow-ups and Learn), `learnings.md` (in Learn), the files `init` creates, and, after the user says yes in `init`, the source permission entries in `~/.claude/settings.json`.
 - Never read, print, edit or commit env files or credentials. The only allowed action is the plain copy of env files into the worktree in New job step 4.
 - The only push allowed is the MAIN push in Merge, after a successful merge. Never push a `factory/*` or `needs-human/*` branch, never use `--force`, `--all`, `--tags` or `-u` with another ref, and never push from any other step or agent.
 - Report what happened, including failures and anything agents said they did not verify.

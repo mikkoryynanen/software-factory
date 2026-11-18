@@ -30,6 +30,11 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
                    │   builder r<n>   │◄───────────────────┐
                    │       opus       │                    │
                    └─────────┬────────┘                    │
+                             ▼                             │
+                   ┌──────────────────┐                    │
+                   │   scope check    │                    │
+                   │   → scope.md     │                    │
+                   └─────────┬────────┘                    │
               ┌──────────────┴──────────────┐              │
               ▼              ▼              ▼              │
         ┌───────────┐  ┌───────────┐  ┌───────────┐        │
@@ -64,6 +69,7 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
 ```
 
 - `review-code` and `review-security` always run. `review-ux` runs only if the diff touches a UX path (listed in `project.md`).
+- After each build, the orchestrator compares the changed files with the spec's Affected modules. Files that the builder's Decisions do not explain go to `scope.md`, and the code reviewer judges them.
 - Every CHANGES finding carries proof: a command and its output, or a quoted rule. When any review asks for changes, the verifier reruns that proof; if nothing holds, the job goes to the approver.
 - If CHANGES remain after the second round, the job goes to `needs-human` instead of looping again.
 - When a job needs you, the factory creates a local `needs-human/<job-id>` branch and a `test.md` with what to check. `/factory run <job-id>` serves it on a free port; or check the branch out yourself.
@@ -87,7 +93,7 @@ Key properties:
 - **Independent review.** Reviewers run in parallel, only read the diff, and cannot edit code. If any asks for changes, a fresh builder fixes them from the files (spec, build notes, verified findings, diff), up to two rounds.
 - **Humans decide the risky bits.** The approver escalates schema changes, new dependencies, build/infra changes, data deletion, unmet or unchecked acceptance criteria, and anything it is unsure about.
 - **Safe git.** Only an approved merge lands on your main branch, and only the main branch is ever pushed. Never `--force`, never a `factory/*` or `needs-human/*` branch. Env files are copied into worktrees but never read or committed.
-- **You own the spec.** After the first draft you see its highlights (goal, acceptance criteria, decisions, open questions) and a link to the full `spec.md`. Ask questions or request changes; the spec-writer revises and you see what changed, for as many rounds as it takes. Building starts only when you say go.
+- **You own the spec.** After the first draft you see its highlights (goal, acceptance criteria, design, decisions, open questions) and a link to the full `spec.md`. Ask questions or request changes; the spec-writer revises and you see what changed, for as many rounds as it takes. Building starts only when you say go.
 - **Learns across jobs.** When a job is merged or rejected, the factory proposes lessons from its findings and your rework notes for `learnings.md`, which every agent reads. You approve each change. A lesson seen in two jobs becomes a backlog item to enforce it with a lint or test.
 - **Everything is files.** Ideas, specs, build notes, reviews and decisions live in `~/.claude/factory/<project>/jobs/<job-id>/`, and `board.json` there tracks job state.
 
@@ -158,7 +164,7 @@ this repo (the plugin)
     board.json            job state
     backlog.md            queue for `/factory next`
     learnings.md          lessons from earlier jobs that every agent reads
-    jobs/<job-id>/        idea.md, scout-*.md, spec.md, spec-feedback.md, build.md, round-N/review-*.md, round-N/verified.md, decision.md, test.md, server.log
+    jobs/<job-id>/        idea.md, scout-*.md, spec.md, spec-feedback.md, build.md, round-N/scope.md, round-N/review-*.md, round-N/verified.md, decision.md, test.md, server.log
     worktrees/<job-id>/   one git worktree per running job
 ```
 
