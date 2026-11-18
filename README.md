@@ -88,7 +88,7 @@ Key properties:
 Requirements: `git`, a main branch (`main` or similar), and [`playwright-cli`](https://github.com/microsoft/playwright-cli) if your app has a UI (used for browser checks).
 
 1. Install the plugin: `/plugin marketplace add mikkoryynanen/software-factory`, then `/plugin install factory@software-factory`.
-2. Open Claude Code in your target repo and run `/factory init`. It surveys the repo (docs, package manager, CI, tests, UI code) and drafts `project.md` in `~/.claude/factory/<project>/`: check commands, conventions, which paths trigger the UX reviewer, what to escalate, how to run the app. It asks only what it cannot infer, then offers to add knowledge sources outside the repo (a notes folder, Slack, Jira, Confluence) for the source scouts, including the read-only permissions they need. You confirm the draft and any settings change before anything is written.
+2. Open Claude Code in your target repo and run `/factory init` (any `/factory` command runs it first if the repo is not set up). It offers to add `~/.claude/factory` to `permissions.additionalDirectories` in `~/.claude/settings.json` so jobs can read and write their state without prompts, then surveys the repo (docs, package manager, CI, tests, UI code) and drafts `project.md` in `~/.claude/factory/<project>/`: check commands, conventions, which paths trigger the UX reviewer, what to escalate, how to run the app. It asks only what it cannot infer, then offers to add knowledge sources outside the repo (a notes folder, Slack, Jira, Confluence) for the source scouts, including the read-only permissions they need. You confirm the draft and any settings change before anything is written.
 3. Dry run with a tiny idea: `/factory --hold <a tiny idea>`.
 
 ### Updating
@@ -105,7 +105,7 @@ rm -r ~/.claude/skills/factory ~/.claude/agents/factory-*.md
 
 Your projects need nothing else: `~/.claude/factory/<project>/` is picked up as is.
 
-`init` also creates `board.json` and `backlog.md` there. It leaves your repo untouched. `<project>` is the repo's absolute path with non-alphanumerics turned into `-`, the same naming Claude Code uses under `~/.claude/projects/`.
+`init` also creates `board.json` and `backlog.md` there. In the repo it only adds `.playwright-cli/` to `.git/info/exclude` (local, not committed) when the app has a UI. `<project>` is the repo's absolute path with non-alphanumerics turned into `-`, the same naming Claude Code uses under `~/.claude/projects/`.
 
 ## Usage
 

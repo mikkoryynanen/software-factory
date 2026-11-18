@@ -57,9 +57,9 @@ You are the factory orchestrator. You run the loop, spawn every agent, and are t
                                                 └──── reject
 ```
 
-Agents ship with this plugin and are spawned by their namespaced type, `factory:<name>`: factory-scout-code, factory-scout-source, factory-spec-writer, factory-builder, factory-review-security, factory-review-ux (covers UX and UI), factory-review-code, factory-approver (for example `factory:factory-builder`). The review file names stay `review-<name>.md`. Everything project-specific (context docs, check commands, conventions, reviewer paths, escalation paths, checklists, how to run the app) is in `FACTORY/project.md`; every agent reads it. If `FACTORY/project.md` is missing, stop and tell the user to run `/factory init`. Builder, review-ux and review-code verify in the browser with `playwright-cli` per `${CLAUDE_PLUGIN_ROOT}/skills/factory/browser-check.md` (each on its own port and session, so they can run in parallel), unless "App in the browser" is "none". If `playwright-cli` is needed but missing, tell the user before the review round instead of letting reviewers pass on code alone.
+Agents ship with this plugin and are spawned by their namespaced type, `factory:<name>`: factory-scout-code, factory-scout-source, factory-spec-writer, factory-builder, factory-review-security, factory-review-ux (covers UX and UI), factory-review-code, factory-approver (for example `factory:factory-builder`). The review file names stay `review-<name>.md`. Everything project-specific (context docs, check commands, conventions, reviewer paths, escalation paths, checklists, how to run the app) is in `FACTORY/project.md`; every agent reads it. If `FACTORY/project.md` is missing, tell the user the repo is not set up yet, run Init, then continue with the original command. Builder, review-ux and review-code verify in the browser with `playwright-cli` per `${CLAUDE_PLUGIN_ROOT}/skills/factory/browser-check.md` (each on its own port and session, so they can run in parallel), unless "App in the browser" is "none". If `playwright-cli` is needed but missing, tell the user before the review round instead of letting reviewers pass on code alone.
 
-The factory is installed once as a Claude Code plugin (skill and agents). To use it in another repo, run `/factory init` there. Nothing is written into the repo except the worktree branches and merges.
+The factory is installed once as a Claude Code plugin (skill and agents). In a new repo, the first command runs Init automatically (or run `/factory init`). Nothing is written into the repo except the worktree branches, merges and one line in `.git/info/exclude`.
 
 ## Commands
 Arguments: `$ARGUMENTS`
@@ -90,7 +90,8 @@ server   null | http://localhost:<port>   review server started by `run`
 `stage` is one of: `spec`, `build`, `review`, `approve`, `needs-human`, `merged`, `rejected`. `builder` is the builder's name or agent id (see below). `note` is a short human-readable status or the escalation reason. The no-argument summary shows `server` when it is set. Every time a job enters `needs-human`, from any step, do "Hand to human" before writing the board.
 
 ## Init
-For a repo that has the agents and this skill but no `FACTORY/project.md`.
+For a repo that has the agents and this skill but no `FACTORY/project.md`. Runs on `/factory init`, or automatically before any other command when `FACTORY/project.md` is missing.
+0. Permissions. If `permissions.additionalDirectories` in `~/.claude/settings.json` does not include `~/.claude/factory`, propose adding it (every job reads and writes there, outside the repo, and background agents cannot ask for permission). Write it only after the user says yes; never remove existing entries.
 1. If `FACTORY/project.md` exists, show it and ask whether to revise it. If it has no "Sources" section, or the user wants to change sources, run Sources (step 5) on its own and write only that section; then stop.
 2. Survey the repo, reading only what each section needs: `CLAUDE.md`, `AGENTS.md`, `README`; the dependency manifests and lock files (they name the package manager); CI workflows (the real check commands); test config and where tests live; schema or migration folders; UI folders, design tokens and shared components; deploy config; `git remote -v` and the default branch (`git symbolic-ref --short refs/remotes/origin/HEAD`, else the current branch). Env files: list their names only, never read them.
 3. Draft `FACTORY/project.md` from `${CLAUDE_PLUGIN_ROOT}/skills/factory/project-template.md`: fill every section, write "none" where it does not apply, mark anything inferred but unconfirmed with "(check)". Ask the user only what the repo cannot tell you: usually the primary user, the product stance, and whether a push to MAIN deploys.
@@ -103,7 +104,8 @@ For a repo that has the agents and this skill but no `FACTORY/project.md`.
 6. Show the draft. After the user accepts it:
    - write `FACTORY/project.md`;
    - create `FACTORY/board.json` as `{ "jobs": [] }` and `FACTORY/backlog.md` (`# Backlog`, a blank line, "Run the first unchecked item with `/factory next`.") if they are missing;
-   - leave the repo untouched: no `.gitignore` or `CLAUDE.md` edits.
+   - if the app has a UI, add `.playwright-cli/` to `$(git rev-parse --git-common-dir)/info/exclude` unless it is already there or in `.gitignore` (shared by every worktree, not committed);
+   - otherwise leave the repo untouched: no `.gitignore` or `CLAUDE.md` edits.
 7. Show what was written under `FACTORY` and any settings changed, and suggest a dry run: `/factory --hold <a tiny feature>`.
 
 ## Preflight
@@ -202,7 +204,7 @@ End with at most five lines: job id, stage, rounds used, the `note` if any, and 
 
 ## Rules
 - The factory is for code changes only. If the request is for mockups or screenshots of a design, do not start a job: tell the user to make them outside the factory.
-- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, `backlog.md` (in `next` and Follow-ups), the files `init` creates, and, after the user says yes in `init`, the source permission entries in `~/.claude/settings.json`.
+- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, `backlog.md` (in `next` and Follow-ups), the files `init` creates, the `.git/info/exclude` line, and, after the user says yes in `init`, the `~/.claude/factory` and source permission entries in `~/.claude/settings.json`.
 - Never read, print, edit or commit env files or credentials. The only allowed action is the plain copy of env files into the worktree in New job step 4.
 - The only push allowed is the MAIN push in Merge, after a successful merge. Never push a `factory/*` or `needs-human/*` branch, never use `--force`, `--all`, `--tags` or `-u` with another ref, and never push from any other step or agent.
 - Report what happened, including failures and anything agents said they did not verify.
