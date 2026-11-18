@@ -79,7 +79,7 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
 |---|---|
 | `scout-code` | Researches the code and project docs (current behaviour, patterns to copy, tests, data) and writes one file with file:line references. Sonnet |
 | `scout-source` | One per knowledge source in `project.md` (notes folder, Slack, Jira…): searches it for earlier decisions and requirements. Haiku |
-| `spec-writer` | Turns the request and the scout findings into a short spec with testable acceptance criteria |
+| `spec-writer` | Picks a playbook (feature, bug fix, refactor) and turns the request and the scout findings into a short spec with a design and testable acceptance criteria |
 | `builder` | Implements the spec on its own branch and worktree, writes tests, runs the checks |
 | `review-code` | Checks correctness, conventions and tests; the only reviewer that runs the test suite |
 | `review-ux` | Checks the flow and visual consistency, in a real browser (only when UI files changed) |
@@ -93,7 +93,7 @@ Key properties:
 - **Independent review.** Reviewers run in parallel, only read the diff, and cannot edit code. If any asks for changes, a fresh builder fixes them from the files (spec, build notes, verified findings, diff), up to two rounds.
 - **Humans decide the risky bits.** The approver escalates schema changes, new dependencies, build/infra changes, data deletion, unmet or unchecked acceptance criteria, and anything it is unsure about.
 - **Safe git.** Only an approved merge lands on your main branch, and only the main branch is ever pushed. Never `--force`, never a `factory/*` or `needs-human/*` branch. Env files are copied into worktrees but never read or committed.
-- **You own the spec.** After the first draft you see its highlights (goal, acceptance criteria, design, decisions, open questions) and a link to the full `spec.md`. Ask questions or request changes; the spec-writer revises and you see what changed, for as many rounds as it takes. Building starts only when you say go.
+- **You own the spec.** After the first draft you see its highlights (playbook, goal, acceptance criteria, design, decisions, open questions) and a link to the full `spec.md`. Ask questions or request changes; the spec-writer revises and you see what changed, for as many rounds as it takes. Building starts only when you say go.
 - **Learns across jobs.** When a job is merged or rejected, the factory proposes lessons from its findings and your rework notes for `learnings.md`, which every agent reads. You approve each change. A lesson seen in two jobs becomes a backlog item to enforce it with a lint or test.
 - **Everything is files.** Ideas, specs, build notes, reviews and decisions live in `~/.claude/factory/<project>/jobs/<job-id>/`, and `board.json` there tracks job state.
 
@@ -157,6 +157,7 @@ this repo (the plugin)
     SKILL.md              the orchestrator: the /factory command and the loop
     project-template.md   template for project.md
     browser-check.md      how agents drive the app with playwright-cli
+    playbooks/            feature, bug-fix and refactor steps for the spec-writer, builder, reviewers and approver
 
 ~/.claude/
   factory/<project>/      created by `init`, one folder per repo

@@ -86,18 +86,18 @@ Arguments: `$ARGUMENTS`
 - no arguments: print a one-line-per-job summary of the board and stop.
 
 ## Paths
-`ROOT` = the main checkout (absolute). `SLUG` = `ROOT` with every character that is not a letter or digit replaced by `-` (the naming Claude Code uses under `~/.claude/projects/`). `FACTORY` = `~/.claude/factory/<SLUG>` (expand `~`; create it if missing). `MAIN` = the main branch from "Branch and push" in `FACTORY/project.md`. `JOB` = `FACTORY/jobs/<job-id>`. `TREE` = `FACTORY/worktrees/<job-id>`. All factory state lives in `FACTORY`, none in the repo. Always pass absolute paths to agents, and start every agent prompt with `FACTORY`.
+`ROOT` = the main checkout (absolute). `SLUG` = `ROOT` with every character that is not a letter or digit replaced by `-` (the naming Claude Code uses under `~/.claude/projects/`). `FACTORY` = `~/.claude/factory/<SLUG>` (expand `~`; create it if missing). `MAIN` = the main branch from "Branch and push" in `FACTORY/project.md`. `JOB` = `FACTORY/jobs/<job-id>`. `TREE` = `FACTORY/worktrees/<job-id>`. `PLAYBOOK` = `${CLAUDE_PLUGIN_ROOT}/skills/factory/playbooks/<playbook>.md`, from the job's `playbook` on the board (`feature` for a job that has none). All factory state lives in `FACTORY`, none in the repo. Always pass absolute paths to agents, and start every agent prompt with `FACTORY`.
 
 ## Board
 `FACTORY/board.json` is `{ "jobs": [...] }`. Rewrite the whole file with a Write after every transition. Job fields:
 ```
-id, title, branch, stage, round, maxRound, builder, hold, note,
+id, title, branch, playbook, stage, round, maxRound, builder, hold, note,
 reviews  { security, ux, code }   current round: pending | PASS | CHANGES | skipped
 past     [ { security, ux, code } ]   verdicts of earlier rounds, oldest first
 decision null | APPROVE | ESCALATE
 server   null | http://localhost:<port>   review server started by `run`
 ```
-`stage` is one of: `spec`, `build`, `review`, `approve`, `needs-human`, `merged`, `rejected`. `builder` is the current round's builder name or agent id (see below). `note` is a short human-readable status or the escalation reason. The no-argument summary shows `server` when it is set. Every time a job enters `needs-human`, from any step, do "Hand to human" before writing the board.
+`stage` is one of: `spec`, `build`, `review`, `approve`, `needs-human`, `merged`, `rejected`. `playbook` is `feature`, `bug-fix` or `refactor`, null until the spec is approved. `builder` is the current round's builder name or agent id (see below). `note` is a short human-readable status or the escalation reason. The no-argument summary shows `server` when it is set. Every time a job enters `needs-human`, from any step, do "Hand to human" before writing the board.
 
 ## Init
 For a repo that has the agents and this skill but no `FACTORY/project.md`.
@@ -131,6 +131,7 @@ Stage `spec`. The spec is the user's document, iterated until it is complete; yo
 1. Read `JOB/spec.md` and show the highlights, not the whole spec:
 ```
 Spec <job-id>, rev <n>. Full spec: <absolute path of JOB/spec.md>
+Playbook: <name>
 Changed: 1 to 3 bullets (rev 2 and later)
 Goal: one line
 Acceptance criteria: the numbered list, one short line each
@@ -142,18 +143,18 @@ Reply: go | a change | a question
 ```
 2. Handle the reply, as many times as needed:
    - a question about the spec: answer from the spec, `idea.md` and the scout files; if they do not cover it, spawn `factory:factory-scout-code` with that one question, save its reply as `JOB/scout-q<k>.md`, and answer from it (at most 3 such scouts per rev). Do not change anything. If the answer shows the spec is wrong or incomplete, propose the change and treat a yes as a change.
-   - a change, or answers to open questions: append it to `JOB/spec-feedback.md` under `## Rev <n+1>` in the user's words plus your clarification. Send to the same spec-writer with SendMessage (load it first: `ToolSearch("select:SendMessage")`): "Revise `JOB/spec.md` per `## Rev <n+1>` in `JOB/spec-feedback.md`. Reply with 1 to 3 bullets of what changed." If it is no longer reachable, spawn `factory:factory-spec-writer` again with the same name and prompt plus "the spec and feedback already exist; revise, do not start over". Check the file still has an acceptance criteria section, then show the highlights again.
+   - a change (a different playbook is a change too), or answers to open questions: append it to `JOB/spec-feedback.md` under `## Rev <n+1>` in the user's words plus your clarification. Send to the same spec-writer with SendMessage (load it first: `ToolSearch("select:SendMessage")`): "Revise `JOB/spec.md` per `## Rev <n+1>` in `JOB/spec-feedback.md`. Reply with 1 to 3 bullets of what changed." If it is no longer reachable, spawn `factory:factory-spec-writer` again with the same name and prompt plus "the spec and feedback already exist; revise, do not start over". Check the file still has an acceptance criteria section, then show the highlights again.
    - the user pauses: stage stays `spec`, `note` = "spec rev <n> awaiting review". Tell the user `/factory continue <job-id>` resumes.
    - the user drops it: stage `rejected`, `note` = why. Stop.
-3. The spec is complete when it has no open questions and the user says go. If they say go while questions are open, use the recommended answers, revise once, and show the highlights for a final go. Board: `note` = "spec rev <n> approved".
+3. The spec is complete when it has no open questions and the user says go. If they say go while questions are open, use the recommended answers, revise once, and show the highlights for a final go. Board: `note` = "spec rev <n> approved", `playbook` = the name on the spec's `Playbook:` line.
 
 ## New job
 1. Id: next free number (3 digits) + kebab slug of at most 4 words, e.g. `004-bulk-paste`. Make `JOB`. Add the board entry: stage `spec`, round 0, maxRound 2, hold true/false, reviews all `pending`, past `[]`.
 2. **Idea.** Write the idea text, verbatim, to `JOB/idea.md` under `# <title>`. No chat: questions and scope are settled in Spec review.
-3. **Scout and spec.** Run Scout (below), then spawn `factory:factory-spec-writer` named `spec-<job-id>` with `JOB/idea.md`, the scout files, and output `JOB/spec.md`. Check the file exists and has an acceptance criteria section; if not, respawn once, then stop and tell the user. Then run Spec review (above). Continue only after the user approves the spec.
+3. **Scout and spec.** Run Scout (below), then spawn `factory:factory-spec-writer` named `spec-<job-id>` with `JOB/idea.md`, the scout files, the playbooks folder `${CLAUDE_PLUGIN_ROOT}/skills/factory/playbooks/`, and output `JOB/spec.md`. Check the file exists and has an acceptance criteria section; if not, respawn once, then stop and tell the user. Then run Spec review (above). Continue only after the user approves the spec.
 4. **Preflight.** Run the Preflight (below) with starting allowed. If a tool is still missing, tell the user which checks it blocks and ask: continue without it or stop. If they continue, put the list in the builder's prompt as "Unavailable: <tools>; do not attempt those checks, list them under Not verified", and in the board `note`. Stage stays `spec`.
 5. **Worktree.** From `ROOT` (must be on MAIN): `git worktree add TREE -b factory/<job-id> MAIN`, then copy every env file from the main checkout into the same place in the worktree: `cd ROOT && find . -name '.env*' -not -path './.git/*' -not -path '*/node_modules/*' -exec rsync -R {} TREE/ \;` (copy only; never read, print or edit them; they are git-ignored). If none is found and the app needs one, tell the user that browser checks may not work. Stage `build`.
-6. **Build.** Spawn `factory:factory-builder` named `builder-<job-id>-r1` (use the Agent tool's name option if it has one) with: `JOB`, `TREE`, branch, "write `JOB/build.md`". Store the name, or the agent id the result returns, in `builder`. Wait for it. Check `build.md` exists and the branch has commits (`git -C TREE log MAIN..HEAD --oneline`).
+6. **Build.** Spawn `factory:factory-builder` named `builder-<job-id>-r1` (use the Agent tool's name option if it has one) with: `JOB`, `TREE`, branch, `PLAYBOOK`, "write `JOB/build.md`". Store the name, or the agent id the result returns, in `builder`. Wait for it. Check `build.md` exists and the branch has commits (`git -C TREE log MAIN..HEAD --oneline`).
 7. **Review round** (below), starting at round 1.
 
 ## Scope check
@@ -168,7 +169,7 @@ Run after each builder finishes, before the reviewers start.
    - `review-code`: always.
    - `review-ux`: only if the diff touches a UX path.
    - `review-security`: always.
-   Set the unchosen ones to `skipped` on the board. In ONE response, spawn the chosen reviewers (agents `factory:factory-review-code`, `factory:factory-review-ux`, `factory:factory-review-security`). Each prompt: `JOB`, `TREE`, branch, round folder, its own output path `JOB/round-n/review-<name>.md` (names: security, ux, code).
+   Set the unchosen ones to `skipped` on the board. In ONE response, spawn the chosen reviewers (agents `factory:factory-review-code`, `factory:factory-review-ux`, `factory:factory-review-security`). Each prompt: `JOB`, `TREE`, branch, `PLAYBOOK`, round folder, its own output path `JOB/round-n/review-<name>.md` (names: security, ux, code).
 3. As each reviewer finishes, read the first line of its file and set that verdict on the board (`VERDICT: PASS` -> `PASS`, `VERDICT: CHANGES` -> `CHANGES`). A missing file or a bad first line: respawn that one reviewer once; if it fails again, mark the job `needs-human` with the reason.
 4. **WAIT FOR ALL** chosen reviewers, with no per-reviewer acknowledgement turns. The round is done only when every chosen file exists with a valid verdict. Never resume the builder, or decide anything, before that.
 5. **Verify.** If any review is CHANGES, spawn `factory:factory-verifier` with `JOB`, `TREE`, branch, round folder, output `JOB/round-n/verified.md`. Read the first line of `verified.md`. A missing file or a bad first line: respawn it once; if it fails again, mark the job `needs-human` with the reason. On the board, set each reviewer whose findings were all dropped (`<name>: kept 0` in `verified.md`) to `PASS`.
@@ -178,10 +179,10 @@ Run after each builder finishes, before the reviewers start.
    - verifier `CHANGES` and n = maxRound: write `JOB/decision.md` yourself: `ESCALATE`, a blank line, "Review rounds exhausted. Open CHANGES:" and one line per kept finding in `JOB/round-n/verified.md`. Decision `ESCALATE`, stage `needs-human`, `note` = that reason.
 
 ## Resume builder
-Stage `build`. Spawn a new `factory:factory-builder` for every round, named `builder-<job-id>-r<k>` (k = the board's `round` + 1), with: `JOB`, `TREE`, branch, the round folder, the "Unavailable" line from New job step 4 if there was one, and "Later round: read `spec.md`, `build.md`, the round folder (`verified.md`, `rework.md`, `scope.md` if present) and the diff." Store its name, or the agent id the result returns, in `builder`. Wait for it, check the branch has new commits, then run Review round n+1.
+Stage `build`. Spawn a new `factory:factory-builder` for every round, named `builder-<job-id>-r<k>` (k = the board's `round` + 1), with: `JOB`, `TREE`, branch, `PLAYBOOK`, the round folder, the "Unavailable" line from New job step 4 if there was one, and "Later round: read `spec.md`, `build.md`, the round folder (`verified.md`, `rework.md`, `scope.md` if present) and the diff." Store its name, or the agent id the result returns, in `builder`. Wait for it, check the branch has new commits, then run Review round n+1.
 
 ## Approve
-Spawn `factory:factory-approver` with `JOB`, `TREE`, branch, outputs `JOB/decision.md` and `JOB/test.md`. Read the first line.
+Spawn `factory:factory-approver` with `JOB`, `TREE`, branch, `PLAYBOOK`, outputs `JOB/decision.md` and `JOB/test.md`. Read the first line.
 - `APPROVE`: decision `APPROVE`. If `hold` is true: stage `needs-human`, `note` = "approved, held for manual testing"; keep worktree and branch, do not merge. Otherwise go to Merge.
 - `ESCALATE`: decision `ESCALATE`, stage `needs-human`, `note` = the first reasoning line.
 

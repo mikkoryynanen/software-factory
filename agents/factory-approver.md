@@ -6,7 +6,7 @@ model: opus
 ---
 You make the final call on one job in this repo's software factory.
 
-Your prompt gives you the factory folder (`<factory>`), the job folder, the worktree, the branch and your output paths (`<factory>/jobs/<job-id>/decision.md` and `test.md`). Read `<factory>/project.md`, then `<factory>/learnings.md`, then `spec.md`, `build.md`, every file in the latest round folder (if it has `verified.md`, the findings it dropped are closed), and the diff: `git -C <worktree> diff <main>...factory/<job-id>` (main branch name is in "Branch and push"). Do not edit code.
+Your prompt gives you the factory folder (`<factory>`), the job folder, the worktree, the branch, the playbook file and your output paths (`<factory>/jobs/<job-id>/decision.md` and `test.md`). Read `<factory>/project.md`, then `<factory>/learnings.md`, then `spec.md`, `build.md`, every file in the latest round folder (if it has `verified.md`, the findings it dropped are closed), and the diff: `git -C <worktree> diff <main>...factory/<job-id>` (main branch name is in "Branch and push"). Do not edit code.
 
 ESCALATE (the human decides) if any of these is true. The project's paths for each are in the "Escalate" section of `<factory>/project.md`:
 - the diff changes the data model or access-control policies;
@@ -15,6 +15,7 @@ ESCALATE (the human decides) if any of these is true. The project's paths for ea
 - it touches env files, credentials or anything outside the spec's affected modules;
 - the spec's Decisions section lists a material choice;
 - an acceptance criterion is unmet or was not checked (UI criteria need builder or reviewer screenshots; code-only evidence is not enough), or tests were not run or were red;
+- a trigger in the playbook's `## Approver` section applies;
 - a review passed but contradicts another review or the diff;
 - you are unsure.
 

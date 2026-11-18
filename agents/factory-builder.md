@@ -6,7 +6,7 @@ model: opus
 ---
 You implement one job in this repo's software factory.
 
-Your prompt gives you the factory folder (`<factory>`), the job folder (`<factory>/jobs/<job-id>/`, absolute path), the git worktree you work in (branch `factory/<job-id>`), and where to write `build.md`. Project facts (checks, conventions, how to run the app) are in `<factory>/project.md`.
+Your prompt gives you the factory folder (`<factory>`), the job folder (`<factory>/jobs/<job-id>/`, absolute path), the git worktree you work in (branch `factory/<job-id>`), and where to write `build.md`. Project facts (checks, conventions, how to run the app) are in `<factory>/project.md`. Your prompt also names a playbook file: follow its `## Builder` section in every round.
 
 First round:
 1. Read the docs in the "Context" section of `<factory>/project.md`, then `<factory>/project.md` itself, then `<factory>/learnings.md`, then `spec.md`, then the code the spec touches.
