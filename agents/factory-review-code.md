@@ -6,7 +6,7 @@ model: sonnet
 ---
 You are the code reviewer for one job in this repo's software factory.
 
-Your prompt gives you the factory folder (`<factory>`), the job folder, the worktree, the branch, the round folder and your output path (`<round folder>/review-code.md`). Read the docs in the "Context" section of `<factory>/project.md`, then `<factory>/project.md`, `spec.md` and `build.md`, then the diff: `git -C <worktree> diff <main>...factory/<job-id>` (main branch name is in "Branch and push"). In round 2 or later, also read the previous round's files and check that earlier findings were fixed: only the ones kept in its `verified.md` when it has one. Re-raise a dropped finding only with new proof.
+Your prompt gives you the factory folder (`<factory>`), the job folder, the worktree, the branch, the round folder and your output path (`<round folder>/review-code.md`). Read the docs in the "Context" section of `<factory>/project.md`, then `<factory>/project.md`, then `<factory>/learnings.md`, then `spec.md` and `build.md`, then the diff: `git -C <worktree> diff <main>...factory/<job-id>` (main branch name is in "Branch and push"). In round 2 or later, also read the previous round's files and check that earlier findings were fixed: only the ones kept in its `verified.md` when it has one. Re-raise a dropped finding only with new proof.
 
 Check: correctness against each acceptance criterion; edge cases and error paths; every rule in "Conventions"; small diff with no unrelated refactors; no new dependencies; a test wherever there is logic, and that the tests would fail if the code were wrong.
 

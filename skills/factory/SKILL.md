@@ -107,7 +107,7 @@ For a repo that has the agents and this skill but no `FACTORY/project.md`.
    Show the settings change and write it only after the user says yes; never remove existing entries. Add one line per source to "Sources" (`name | access | what it holds`), or "none".
 6. Show the draft. After the user accepts it:
    - write `FACTORY/project.md`;
-   - create `FACTORY/board.json` as `{ "jobs": [] }` and `FACTORY/backlog.md` (`# Backlog`, a blank line, "Run the first unchecked item with `/factory next`.") if they are missing;
+   - create `FACTORY/board.json` as `{ "jobs": [] }`, `FACTORY/backlog.md` (`# Backlog`, a blank line, "Run the first unchecked item with `/factory next`.") and `FACTORY/learnings.md` (the header in Learn) if they are missing;
    - leave the repo untouched: no `.gitignore` or `CLAUDE.md` edits.
 7. Show what was written under `FACTORY` and any settings changed, and suggest a dry run: `/factory --hold <a tiny feature>`.
 
@@ -203,12 +203,29 @@ Before the builder resumes, bring the user's commits into the agent branch and r
 ## Follow-ups
 When a job reaches `needs-human` or `merged`, read the `Notes` of every review file in its round folders. For each note that defers work (names a later job, says "follow-up", "later", "next job"), append `- [ ] <the note, one line> (from <job-id>)` to `FACTORY/backlog.md`, skipping ones already there. List what you added in Finish.
 
+## Learn
+When a job reaches `merged` or `rejected`, after Follow-ups. If `FACTORY/learnings.md` is missing, create it with this header:
+```
+# Learnings
+| lesson | jobs | enforced by |
+|---|---|---|
+```
+`lesson` is one line a future agent can act on. `jobs` lists the job ids. `enforced by` is `none`, `project.md Conventions`, or the lint, test or check that enforces the lesson. The file holds at most 30 rows.
+1. Read the CHANGES findings from every round folder (from `verified.md` when it exists, else the review files), every `rework.md`, and the ESCALATE reason in `JOB/decision.md`. If there are none, stop here.
+2. Propose changes to the whole file:
+   - a new row only for a lesson that would change what a future agent does;
+   - a lesson already in a row adds the job id to that row instead of a new row;
+   - delete rows that a lint or test now enforces.
+3. Show the proposal. Write the file only after the user says yes. Rewrite the whole file; never append.
+4. For each row that now lists two or more jobs and has `enforced by` = `none`, add `- [ ] Enforce: <lesson> with a lint or test (from learnings)` to `FACTORY/backlog.md` if it is not there already.
+5. At 30 rows, move the oldest row with `enforced by` = `none` to the backlog the same way, and delete it.
+
 ## Finish
 End with at most five lines: job id, stage, rounds used, the `note` if any, and the next command the user may want. For needs-human: `/factory run <id>` (or `git switch needs-human/<id>`), then `/factory approve|rework|reject <id>`.
 
 ## Rules
 - The factory is for code changes only. If the request is for mockups or screenshots of a design, do not start a job: tell the user to make them outside the factory.
-- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the verifier writes only `verified.md`; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, `backlog.md` (in `next` and Follow-ups), the files `init` creates, and, after the user says yes in `init`, the source permission entries in `~/.claude/settings.json`.
+- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the verifier writes only `verified.md`; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, `backlog.md` (in `next`, Follow-ups and Learn), `learnings.md` (in Learn), the files `init` creates, and, after the user says yes in `init`, the source permission entries in `~/.claude/settings.json`.
 - Never read, print, edit or commit env files or credentials. The only allowed action is the plain copy of env files into the worktree in New job step 4.
 - The only push allowed is the MAIN push in Merge, after a successful merge. Never push a `factory/*` or `needs-human/*` branch, never use `--force`, `--all`, `--tags` or `-u` with another ref, and never push from any other step or agent.
 - Report what happened, including failures and anything agents said they did not verify.
