@@ -35,15 +35,20 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
         ┌───────────┐  ┌───────────┐  ┌───────────┐        │
         │ security  │  │     ux    │  │    code   │        │
         │    opus   │  │   sonnet  │  │   sonnet  │        │
-        │(if needed)│  │(if needed)│  │ (always)  │        │
+        │ (always)  │  │(if needed)│  │ (always)  │        │
         └─────┬─────┘  └─────┬─────┘  └─────┬─────┘        │
               └──────────────┬──────────────┘              │
                              ▼                             │
-                   ┌──────────────────┐   any CHANGES:     │
-                   │   WAIT FOR ALL   ├────────────────────┘
-                   │  chosen reviews  │   resume builder
-                   └─────────┬────────┘   (max 2 rounds)
-                             ▼ all PASS
+                   ┌──────────────────┐                    │
+                   │   WAIT FOR ALL   │                    │
+                   │  chosen reviews  │                    │
+                   └─────────┬────────┘                    │
+                             ▼ any CHANGES                 │
+                   ┌──────────────────┐   CHANGES, n < 2:  │
+                   │     verifier     ├────────────────────┘
+                   │      sonnet      │   resume builder
+                   └─────────┬────────┘   CHANGES, n = 2:
+                             ▼ PASS       needs-human
                    ┌──────────────────┐
                    │     approver     │
                    │       opus       │
@@ -59,6 +64,7 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
 ```
 
 - `review-code` and `review-security` always run. `review-ux` runs only if the diff touches a UX path (listed in `project.md`).
+- Every CHANGES finding carries proof: a command and its output, or a quoted rule. When any review asks for changes, the verifier reruns that proof; if nothing holds, the job goes to the approver.
 - If CHANGES remain after the second round, the job goes to `needs-human` instead of looping again.
 - When a job needs you, the factory creates a local `needs-human/<job-id>` branch and a `test.md` with what to check. `/factory run <job-id>` serves it on a free port; or check the branch out yourself.
 - With `--hold`, an APPROVE also stops at `needs-human` so you can test the branch before merging.
@@ -72,6 +78,7 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
 | `review-code` | Checks correctness, conventions and tests; the only reviewer that runs the test suite |
 | `review-ux` | Checks the flow and visual consistency, in a real browser (only when UI files changed) |
 | `review-security` | Checks the diff for security problems, including the OWASP Top 10 |
+| `verifier` | Reruns the proof behind each CHANGES finding and drops the ones that do not hold, so an unproven guess does not use up a round. Sonnet |
 | `approver` | Final gate: `APPROVE` (merge) or `ESCALATE` (needs you) |
 
 Key properties:
@@ -138,7 +145,7 @@ Typical flow:
 ```
 this repo (the plugin)
   .claude-plugin/         plugin.json and marketplace.json
-  agents/factory-*.md     the eight agents above
+  agents/factory-*.md     the nine agents above
   skills/factory/
     SKILL.md              the orchestrator: the /factory command and the loop
     project-template.md   template for project.md
@@ -149,7 +156,7 @@ this repo (the plugin)
     project.md            your project config
     board.json            job state
     backlog.md            queue for `/factory next`
-    jobs/<job-id>/        idea.md, scout-*.md, spec.md, spec-feedback.md, build.md, round-N/review-*.md, decision.md, test.md, server.log
+    jobs/<job-id>/        idea.md, scout-*.md, spec.md, spec-feedback.md, build.md, round-N/review-*.md, round-N/verified.md, decision.md, test.md, server.log
     worktrees/<job-id>/   one git worktree per running job
 ```
 

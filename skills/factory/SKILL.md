@@ -33,15 +33,20 @@ You are the factory orchestrator. You run the loop, spawn every agent, and are t
         ┌───────────┐        ┌───────────┐        ┌───────────┐         │
         │ security  │        │     ux    │        │    code   │         │
         │   opus    │        │  sonnet   │        │  sonnet   │         │
-        │(if needed)│        │(if needed)│        │ (always)  │         │
+        │ (always)  │        │(if needed)│        │ (always)  │         │
         └─────┬─────┘        └─────┬─────┘        └─────┬─────┘         │
               └────────────────────┼────────────────────┘               │
                                    ▼                                    │
-                         ┌──────────────────┐   any CHANGES:            │
-                         │   WAIT FOR ALL   ├───────────────────────────┤
-                         │  chosen reviews  │   resume builder          │
-                         └─────────┬────────┘   (max 2 rounds)          │
-                                   ▼ all PASS
+                         ┌──────────────────┐                           │
+                         │   WAIT FOR ALL   │                           │
+                         │  chosen reviews  │                           │
+                         └─────────┬────────┘                           │
+                                   ▼ any CHANGES (all PASS: approver)   │
+                         ┌──────────────────┐   CHANGES, n < 2:         │
+                         │     verifier     ├───────────────────────────┘
+                         │      sonnet      │   resume builder
+                         └─────────┬────────┘   CHANGES, n = 2:
+                                   ▼ PASS       needs-human
                          ┌──────────────────┐
                          │     approver     │
                          │       opus       │
@@ -57,7 +62,7 @@ You are the factory orchestrator. You run the loop, spawn every agent, and are t
                                                 └──── reject
 ```
 
-Agents ship with this plugin and are spawned by their namespaced type, `factory:<name>`: factory-scout-code, factory-scout-source, factory-spec-writer, factory-builder, factory-review-security, factory-review-ux (covers UX and UI), factory-review-code, factory-approver (for example `factory:factory-builder`). The review file names stay `review-<name>.md`. Everything project-specific (context docs, check commands, conventions, reviewer paths, escalation paths, checklists, how to run the app) is in `FACTORY/project.md`; every agent reads it. If `FACTORY/project.md` is missing, stop and tell the user to run `/factory init`. Builder, review-ux and review-code verify in the browser with `playwright-cli` per `${CLAUDE_PLUGIN_ROOT}/skills/factory/browser-check.md` (each on its own port and session, so they can run in parallel), unless "App in the browser" is "none". If `playwright-cli` is needed but missing, tell the user before the review round instead of letting reviewers pass on code alone.
+Agents ship with this plugin and are spawned by their namespaced type, `factory:<name>`: factory-scout-code, factory-scout-source, factory-spec-writer, factory-builder, factory-review-security, factory-review-ux (covers UX and UI), factory-review-code, factory-verifier, factory-approver (for example `factory:factory-builder`). The review file names stay `review-<name>.md`. Everything project-specific (context docs, check commands, conventions, reviewer paths, escalation paths, checklists, how to run the app) is in `FACTORY/project.md`; every agent reads it. If `FACTORY/project.md` is missing, stop and tell the user to run `/factory init`. Builder, review-ux and review-code verify in the browser with `playwright-cli` per `${CLAUDE_PLUGIN_ROOT}/skills/factory/browser-check.md` (each on its own port and session, so they can run in parallel), unless "App in the browser" is "none". If `playwright-cli` is needed but missing, tell the user before the review round instead of letting reviewers pass on code alone.
 
 The factory is installed once as a Claude Code plugin (skill and agents). To use it in another repo, run `/factory init` there. Nothing is written into the repo except the worktree branches and merges.
 
@@ -154,10 +159,11 @@ Reply: go | a change | a question
    Set the unchosen ones to `skipped` on the board. In ONE response, spawn the chosen reviewers (agents `factory:factory-review-code`, `factory:factory-review-ux`, `factory:factory-review-security`). Each prompt: `JOB`, `TREE`, branch, round folder, its own output path `JOB/round-n/review-<name>.md` (names: security, ux, code).
 3. As each reviewer finishes, read the first line of its file and set that verdict on the board (`VERDICT: PASS` -> `PASS`, `VERDICT: CHANGES` -> `CHANGES`). A missing file or a bad first line: respawn that one reviewer once; if it fails again, mark the job `needs-human` with the reason.
 4. **WAIT FOR ALL** chosen reviewers, with no per-reviewer acknowledgement turns. The round is done only when every chosen file exists with a valid verdict. Never resume the builder, or decide anything, before that.
-5. Outcome:
-   - all chosen PASS: stage `approve`, go to Approve.
-   - any CHANGES and n < maxRound: push the reviews onto `past`, go to Resume builder with `JOB/round-n`.
-   - any CHANGES and n = maxRound: write `JOB/decision.md` yourself: `ESCALATE`, a blank line, "Review rounds exhausted. Open CHANGES:" and one line per CHANGES review. Decision `ESCALATE`, stage `needs-human`, `note` = that reason.
+5. **Verify.** If any review is CHANGES, spawn `factory:factory-verifier` with `JOB`, `TREE`, branch, round folder, output `JOB/round-n/verified.md`. Read the first line of `verified.md`. A missing file or a bad first line: respawn it once; if it fails again, mark the job `needs-human` with the reason. On the board, set each reviewer whose findings were all dropped (`<name>: kept 0` in `verified.md`) to `PASS`.
+6. Outcome, using the verifier's verdict when it ran:
+   - all chosen PASS, or verifier `PASS`: stage `approve`, go to Approve.
+   - verifier `CHANGES` and n < maxRound: push the reviews onto `past`, go to Resume builder with `JOB/round-n`.
+   - verifier `CHANGES` and n = maxRound: write `JOB/decision.md` yourself: `ESCALATE`, a blank line, "Review rounds exhausted. Open CHANGES:" and one line per kept finding in `JOB/round-n/verified.md`. Decision `ESCALATE`, stage `needs-human`, `note` = that reason.
 
 ## Resume builder
 Stage `build`. Send to the same builder with SendMessage (never spawn a second one): "Round folder: `<round folder>`. Read every file in it, fix, commit in TREE, append to `JOB/build.md`." Wait for the reply, check the branch has new commits, then run Review round n+1. If the builder is no longer reachable (new session), spawn `factory-builder` again with the same name and prompt plus "continue the work already on the branch; read `build.md` and the round folder".
@@ -202,7 +208,7 @@ End with at most five lines: job id, stage, rounds used, the `note` if any, and 
 
 ## Rules
 - The factory is for code changes only. If the request is for mockups or screenshots of a design, do not start a job: tell the user to make them outside the factory.
-- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, `backlog.md` (in `next` and Follow-ups), the files `init` creates, and, after the user says yes in `init`, the source permission entries in `~/.claude/settings.json`.
+- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the verifier writes only `verified.md`; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, `backlog.md` (in `next` and Follow-ups), the files `init` creates, and, after the user says yes in `init`, the source permission entries in `~/.claude/settings.json`.
 - Never read, print, edit or commit env files or credentials. The only allowed action is the plain copy of env files into the worktree in New job step 4.
 - The only push allowed is the MAIN push in Merge, after a successful merge. Never push a `factory/*` or `needs-human/*` branch, never use `--force`, `--all`, `--tags` or `-u` with another ref, and never push from any other step or agent.
 - Report what happened, including failures and anything agents said they did not verify.
