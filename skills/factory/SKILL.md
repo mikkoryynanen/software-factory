@@ -25,7 +25,7 @@ You are the factory orchestrator. You run the loop, spawn every agent, and are t
                          └─────────┬────────┘
                                    ▼ you say go
                          ┌──────────────────┐
-                         │     builder      │◄──────────────────────────┐
+                         │   builder r<n>   │◄──────────────────────────┐
                          │       opus       │                           │
                          └─────────┬────────┘                           │
               ┌────────────────────┼────────────────────┐               │
@@ -44,7 +44,7 @@ You are the factory orchestrator. You run the loop, spawn every agent, and are t
                                    ▼ any CHANGES (all PASS: approver)   │
                          ┌──────────────────┐   CHANGES, n < 2:         │
                          │     verifier     ├───────────────────────────┘
-                         │      sonnet      │   resume builder
+                         │      sonnet      │   fresh builder
                          └─────────┬────────┘   CHANGES, n = 2:
                                    ▼ PASS       needs-human
                          ┌──────────────────┐
@@ -92,7 +92,7 @@ past     [ { security, ux, code } ]   verdicts of earlier rounds, oldest first
 decision null | APPROVE | ESCALATE
 server   null | http://localhost:<port>   review server started by `run`
 ```
-`stage` is one of: `spec`, `build`, `review`, `approve`, `needs-human`, `merged`, `rejected`. `builder` is the builder's name or agent id (see below). `note` is a short human-readable status or the escalation reason. The no-argument summary shows `server` when it is set. Every time a job enters `needs-human`, from any step, do "Hand to human" before writing the board.
+`stage` is one of: `spec`, `build`, `review`, `approve`, `needs-human`, `merged`, `rejected`. `builder` is the current round's builder name or agent id (see below). `note` is a short human-readable status or the escalation reason. The no-argument summary shows `server` when it is set. Every time a job enters `needs-human`, from any step, do "Hand to human" before writing the board.
 
 ## Init
 For a repo that has the agents and this skill but no `FACTORY/project.md`.
@@ -147,7 +147,7 @@ Reply: go | a change | a question
 3. **Scout and spec.** Run Scout (below), then spawn `factory:factory-spec-writer` named `spec-<job-id>` with `JOB/idea.md`, the scout files, and output `JOB/spec.md`. Check the file exists and has an acceptance criteria section; if not, respawn once, then stop and tell the user. Then run Spec review (above). Continue only after the user approves the spec.
 4. **Preflight.** Run the Preflight (below) with starting allowed. If a tool is still missing, tell the user which checks it blocks and ask: continue without it or stop. If they continue, put the list in the builder's prompt as "Unavailable: <tools>; do not attempt those checks, list them under Not verified", and in the board `note`. Stage stays `spec`.
 5. **Worktree.** From `ROOT` (must be on MAIN): `git worktree add TREE -b factory/<job-id> MAIN`, then copy every env file from the main checkout into the same place in the worktree: `cd ROOT && find . -name '.env*' -not -path './.git/*' -not -path '*/node_modules/*' -exec rsync -R {} TREE/ \;` (copy only; never read, print or edit them; they are git-ignored). If none is found and the app needs one, tell the user that browser checks may not work. Stage `build`.
-6. **Build.** Load SendMessage first: `ToolSearch("select:SendMessage")`. Spawn `factory:factory-builder` named `builder-<job-id>` (use the Agent tool's name option if it has one) with: `JOB`, `TREE`, branch, "write `JOB/build.md`". Store the name, or the agent id the result returns, in `builder`. Wait for it. Check `build.md` exists and the branch has commits (`git -C TREE log MAIN..HEAD --oneline`).
+6. **Build.** Spawn `factory:factory-builder` named `builder-<job-id>-r1` (use the Agent tool's name option if it has one) with: `JOB`, `TREE`, branch, "write `JOB/build.md`". Store the name, or the agent id the result returns, in `builder`. Wait for it. Check `build.md` exists and the branch has commits (`git -C TREE log MAIN..HEAD --oneline`).
 7. **Review round** (below), starting at round 1.
 
 ## Review round n
@@ -166,7 +166,7 @@ Reply: go | a change | a question
    - verifier `CHANGES` and n = maxRound: write `JOB/decision.md` yourself: `ESCALATE`, a blank line, "Review rounds exhausted. Open CHANGES:" and one line per kept finding in `JOB/round-n/verified.md`. Decision `ESCALATE`, stage `needs-human`, `note` = that reason.
 
 ## Resume builder
-Stage `build`. Send to the same builder with SendMessage (never spawn a second one): "Round folder: `<round folder>`. Read every file in it, fix, commit in TREE, append to `JOB/build.md`." Wait for the reply, check the branch has new commits, then run Review round n+1. If the builder is no longer reachable (new session), spawn `factory-builder` again with the same name and prompt plus "continue the work already on the branch; read `build.md` and the round folder".
+Stage `build`. Spawn a new `factory:factory-builder` for every round, named `builder-<job-id>-r<k>` (k = the board's `round` + 1), with: `JOB`, `TREE`, branch, the round folder, the "Unavailable" line from New job step 4 if there was one, and "Later round: read `spec.md`, `build.md`, the round folder (`verified.md`, `rework.md`, `scope.md` if present) and the diff." Store its name, or the agent id the result returns, in `builder`. Wait for it, check the branch has new commits, then run Review round n+1.
 
 ## Approve
 Spawn `factory:factory-approver` with `JOB`, `TREE`, branch, outputs `JOB/decision.md` and `JOB/test.md`. Read the first line.

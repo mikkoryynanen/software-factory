@@ -27,7 +27,7 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
                    └─────────┬────────┘
                              ▼ you say go
                    ┌──────────────────┐
-                   │     builder      │◄───────────────────┐
+                   │   builder r<n>   │◄───────────────────┐
                    │       opus       │                    │
                    └─────────┬────────┘                    │
               ┌──────────────┴──────────────┐              │
@@ -46,7 +46,7 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
                              ▼ any CHANGES                 │
                    ┌──────────────────┐   CHANGES, n < 2:  │
                    │     verifier     ├────────────────────┘
-                   │      sonnet      │   resume builder
+                   │      sonnet      │   fresh builder
                    └─────────┬────────┘   CHANGES, n = 2:
                              ▼ PASS       needs-human
                    ┌──────────────────┐
@@ -84,7 +84,7 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
 Key properties:
 
 - **Isolated.** Each job runs in its own git worktree on a local `factory/<job-id>` branch. Your main checkout is never touched while a job runs.
-- **Independent review.** Reviewers run in parallel, only read the diff, and cannot edit code. If any asks for changes, the same builder fixes them, up to two rounds.
+- **Independent review.** Reviewers run in parallel, only read the diff, and cannot edit code. If any asks for changes, a fresh builder fixes them from the files (spec, build notes, verified findings, diff), up to two rounds.
 - **Humans decide the risky bits.** The approver escalates schema changes, new dependencies, build/infra changes, data deletion, unmet or unchecked acceptance criteria, and anything it is unsure about.
 - **Safe git.** Only an approved merge lands on your main branch, and only the main branch is ever pushed. Never `--force`, never a `factory/*` or `needs-human/*` branch. Env files are copied into worktrees but never read or committed.
 - **You own the spec.** After the first draft you see its highlights (goal, acceptance criteria, decisions, open questions) and a link to the full `spec.md`. Ask questions or request changes; the spec-writer revises and you see what changed, for as many rounds as it takes. Building starts only when you say go.
