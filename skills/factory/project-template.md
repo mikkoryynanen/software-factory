@@ -9,7 +9,7 @@ Docs every agent reads first (usually `CLAUDE.md`), and docs only the spec-write
 Knowledge sources outside the repo, one source scout each per job. One line per source: `name | access | what it holds`. Access is a folder path (read with Read and Grep; add it to `permissions.additionalDirectories`) or the MCP server whose tools search it (allow only its search and read tools; scouts never write). Example: `obsidian | ~/Notes/Work | meeting notes, decisions`, `jira | MCP atlassian | tickets for project CRON`. "none" if there are none; the code scout always runs.
 
 ## Branch and push
-Main branch name. Whether to push after a merge, and the exact command (normally `git push origin <main>`). What a push triggers (deploy, CI).
+Main branch name. `Delivery: merge` (an approved job is merged into main locally) or `Delivery: pr` (the factory pushes `factory/<job-id>` to `origin` and opens a PR with `gh`; you merge it on GitHub). For `merge`: whether to push main after a merge, and the exact command (normally `git push origin <main>`). What a push triggers (deploy, CI).
 
 ## Checks
 Working directory for commands. Install command for a fresh worktree. Typecheck, lint, unit test and build commands. Where unit tests live and their file pattern. Database or integration tests: the command, what they need, and when to run them.

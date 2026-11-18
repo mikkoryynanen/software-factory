@@ -1,6 +1,6 @@
 # Software factory
 
-A portable [Claude Code](https://claude.com/claude-code) setup that turns an idea into reviewed, merged code. You describe an idea; scouts research the codebase, a spec-writer drafts a spec you iterate on until it's right, then a team of specialised agents builds it on a branch, reviews it, and either merges it or hands it back to you.
+A portable [Claude Code](https://claude.com/claude-code) setup that turns an idea into reviewed, merged code. You describe an idea; scouts research the codebase, a spec-writer drafts a spec you iterate on until it's right, then a team of specialised agents builds it on a branch, reviews it, and either merges it, opens a PR for you to merge, or hands it back to you.
 
 Installed once as a Claude Code plugin (agents plus one skill). Everything the factory writes (project config, job state, worktrees) lives in `~/.claude/factory/<project>/`, not in your repo.
 
@@ -61,7 +61,7 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
              APPROVE │               │ ESCALATE
                      ▼               ▼
               ┌─────────────┐ ┌──────────────────────┐
-              │merge to main│ │ needs-human/<job-id> │
+              │ merge / PR  │ │ needs-human/<job-id> │
               └──────▲──────┘ │ branch + test.md     │
                      │        └──────────┬───────────┘
                      │                   ▼ /factory run, you test
@@ -74,6 +74,7 @@ One AI agent writing and judging its own code is unreliable. The factory splits 
 - If CHANGES remain after the second round, the job goes to `needs-human` instead of looping again.
 - When a job needs you, the factory creates a local `needs-human/<job-id>` branch and a `test.md` with what to check. `/factory run <job-id>` serves it on a free port; or check the branch out yourself.
 - With `--hold`, an APPROVE also stops at `needs-human` so you can test the branch before merging.
+- With `Delivery: pr` in `project.md`, an approved job is not merged locally: the factory pushes `factory/<job-id>`, opens a PR with `gh`, and you merge it on GitHub. `/factory` notices merged or closed PRs and cleans up; `/factory rework` pushes new commits to the same PR.
 
 | Agent | Job |
 |---|---|
@@ -92,14 +93,14 @@ Key properties:
 - **Isolated.** Each job runs in its own git worktree on a local `factory/<job-id>` branch. Your main checkout is never touched while a job runs.
 - **Independent review.** Reviewers run in parallel, only read the diff, and cannot edit code. If any asks for changes, a fresh builder fixes them from the files (spec, build notes, verified findings, diff), up to two rounds.
 - **Humans decide the risky bits.** The approver escalates schema changes, new dependencies, build/infra changes, data deletion, unmet or unchecked acceptance criteria, and anything it is unsure about.
-- **Safe git.** Only an approved merge lands on your main branch, and only the main branch is ever pushed. Never `--force`, never a `factory/*` or `needs-human/*` branch. Env files are copied into worktrees but never read or committed.
+- **Safe git.** Only an approved merge lands on your main branch. With `Delivery: merge` only the main branch is ever pushed; with `Delivery: pr` only `factory/<job-id>` is pushed and main never is. Never `--force`, never a `needs-human/*` branch. Env files are copied into worktrees but never read or committed.
 - **You own the spec.** After the first draft you see its highlights (playbook, goal, acceptance criteria, design, decisions, open questions) and a link to the full `spec.md`. Ask questions or request changes; the spec-writer revises and you see what changed, for as many rounds as it takes. Building starts only when you say go.
 - **Learns across jobs.** When a job is merged or rejected, the factory proposes lessons from its findings and your rework notes for `learnings.md`, which every agent reads. You approve each change. A lesson seen in two jobs becomes a backlog item to enforce it with a lint or test.
 - **Everything is files.** Ideas, specs, build notes, reviews and decisions live in `~/.claude/factory/<project>/jobs/<job-id>/`, and `board.json` there tracks job state.
 
 ## Setup
 
-Requirements: `git`, a main branch (`main` or similar), and [`playwright-cli`](https://github.com/microsoft/playwright-cli) if your app has a UI (used for browser checks).
+Requirements: `git`, a main branch (`main` or similar), `gh` signed in with `repo` scope if you use `Delivery: pr`, and [`playwright-cli`](https://github.com/microsoft/playwright-cli) if your app has a UI (used for browser checks).
 
 1. Install the plugin: `/plugin marketplace add mikkoryynanen/software-factory`, then `/plugin install factory@software-factory`.
 2. Open Claude Code in your target repo and run `/factory init`. It surveys the repo (docs, package manager, CI, tests, UI code) and drafts `project.md` in `~/.claude/factory/<project>/`: check commands, conventions, which paths trigger the UX reviewer, what to escalate, how to run the app. It asks only what it cannot infer, then offers to add knowledge sources outside the repo (a notes folder, Slack, Jira, Confluence) for the source scouts, including the read-only permissions they need. You confirm the draft and any settings change before anything is written.
@@ -131,11 +132,11 @@ Your projects need nothing else: `~/.claude/factory/<project>/` is picked up as 
 | `/factory continue <job-id>` | Resume a spec review you paused |
 | `/factory run <job-id>` | Serve a `needs-human` job's branch locally, open it, and print its test steps |
 | `/factory stop [<job-id>]` | Stop that job's review server, or all of them |
-| `/factory approve <job-id>` | Merge a job that is waiting on you (`needs-human`), including commits you added to its branch |
-| `/factory rework <job-id> <note>` | Send a job back to the builder with your feedback (your commits on `needs-human/<job-id>` go with it) |
-| `/factory reject <job-id>` | Drop a `needs-human` job and delete its branches and worktree (asks first) |
+| `/factory approve <job-id>` | Merge a job that is waiting on you (`needs-human`), or open its PR with `Delivery: pr`, including commits you added to its branch |
+| `/factory rework <job-id> <note>` | Send a job back to the builder with your feedback (your commits on `needs-human/<job-id>` go with it); for a `pr-open` job the fix is pushed to the same PR |
+| `/factory reject <job-id>` | Drop a `needs-human` job and delete its branches and worktree (asks first). For a `pr-open` job, close the PR on GitHub instead |
 | `/factory init` | Set up the factory for this repo |
-| `/factory` | Show a one-line-per-job summary of the board |
+| `/factory` | Clean up jobs whose PR was merged or closed, then show a one-line-per-job summary of the board |
 
 Typical flow:
 

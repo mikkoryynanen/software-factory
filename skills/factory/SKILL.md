@@ -1,6 +1,6 @@
 ---
 name: factory
-description: Run an idea through the software factory loop (scouts, spec review, build, up to three reviews, approval, merge). Commands - /factory <idea>, next, continue <job-id>, run <job-id>, stop [<job-id>], approve <job-id>, rework <job-id> <note>, reject <job-id>, init.
+description: Run an idea through the software factory loop (scouts, spec review, build, up to three reviews, approval, merge or PR). Commands - /factory <idea>, next, continue <job-id>, run <job-id>, stop [<job-id>], approve <job-id>, rework <job-id> <note>, reject <job-id>, init.
 argument-hint: [--hold] <idea> | [--hold] next | continue <job-id> | run <job-id> | stop [<job-id>] | approve <job-id> | rework <job-id> <note> | reject <job-id> | init
 disable-model-invocation: true
 ---
@@ -59,7 +59,7 @@ You are the factory orchestrator. You run the loop, spawn every agent, and are t
                  APPROVE   │               │  ESCALATE
                            ▼               ▼
                     ┌─────────────┐  ┌──────────────────────┐
-                    │merge to MAIN│  │ needs-human/<job-id> │
+                    │ merge / PR  │  │ needs-human/<job-id> │
                     └─────────────┘  │ branch + test.md     │
                            ▲         └──────────┬───────────┘
                            │ approve            ▼ run, test
@@ -69,7 +69,7 @@ You are the factory orchestrator. You run the loop, spawn every agent, and are t
 
 Agents ship with this plugin and are spawned by their namespaced type, `factory:<name>`: factory-scout-code, factory-scout-source, factory-spec-writer, factory-builder, factory-review-security, factory-review-ux (covers UX and UI), factory-review-code, factory-verifier, factory-approver (for example `factory:factory-builder`). The review file names stay `review-<name>.md`. Everything project-specific (context docs, check commands, conventions, reviewer paths, escalation paths, checklists, how to run the app) is in `FACTORY/project.md`; every agent reads it. If `FACTORY/project.md` is missing, stop and tell the user to run `/factory init`. Builder, review-ux and review-code verify in the browser with `playwright-cli` per `${CLAUDE_PLUGIN_ROOT}/skills/factory/browser-check.md` (each on its own port and session, so they can run in parallel), unless "App in the browser" is "none". If `playwright-cli` is needed but missing, tell the user before the review round instead of letting reviewers pass on code alone.
 
-The factory is installed once as a Claude Code plugin (skill and agents). To use it in another repo, run `/factory init` there. Nothing is written into the repo except the worktree branches and merges.
+The factory is installed once as a Claude Code plugin (skill and agents). To use it in another repo, run `/factory init` there. Nothing is written into the repo except the worktree branches and merges, and with `Delivery: pr` the pushed `factory/<job-id>` branch and its PR.
 
 ## Commands
 Arguments: `$ARGUMENTS`
@@ -79,11 +79,11 @@ Arguments: `$ARGUMENTS`
 - `continue <job-id>`: job must be stage `spec`. Continue New job from step 3: Spec review if `JOB/spec.md` exists, else the spec-writer (scouts first if no `JOB/scout-*.md` exists).
 - `run <job-id>`: job must be `needs-human`. Do "Run for human".
 - `stop [<job-id>]`: do "Stop server" for that job, or for every job with a `server` on the board.
-- `approve <job-id>`: job must be `needs-human`. Do "Stop server", then "Merge", set `note` to "approved by human".
-- `rework <job-id> <note>`: job must be `needs-human` or `review`. Do "Stop server". If `needs-human/<job-id>` exists, do "Take back human branch"; stop if it fails. Write the note to `JOB/round-<n+1>/rework.md` (n = current round), set `maxRound` to n+2, and go to "Resume builder" with that round folder. Reviews for round n+1 then run as usual.
-- `reject <job-id>`: job must be `needs-human`. Show the user the commits on `factory/<job-id>` and `needs-human/<job-id>` that are not on MAIN and ask them to confirm deleting them. After a yes: "Stop server", `git worktree remove TREE` (never `--force`; if it refuses, report why and stop), `git branch -D factory/<job-id> needs-human/<job-id>`, stage `rejected`, `note` = "rejected by human".
+- `approve <job-id>`: job must be `needs-human`. Do "Stop server", then "Deliver", set `note` to "approved by human" (Open PR overwrites it with the PR link).
+- `rework <job-id> <note>`: job must be `needs-human`, `review` or `pr-open`. Do "Stop server". If `needs-human/<job-id>` exists, do "Take back human branch"; stop if it fails. Write the note to `JOB/round-<n+1>/rework.md` (n = current round), set `maxRound` to n+2, and go to "Resume builder" with that round folder. Reviews for round n+1 then run as usual.
+- `reject <job-id>`: for a `pr-open` job, tell the user to close the PR on GitHub; the next `/factory` cleans up. Otherwise the job must be `needs-human`. Show the user the commits on `factory/<job-id>` and `needs-human/<job-id>` that are not on MAIN and ask them to confirm deleting them. After a yes: "Stop server", `git worktree remove TREE` (never `--force`; if it refuses, report why and stop), `git branch -D factory/<job-id> needs-human/<job-id>`, stage `rejected`, `note` = "rejected by human".
 - `init`: set up the factory in this repo (below).
-- no arguments: print a one-line-per-job summary of the board and stop.
+- no arguments: run "PR check" for every `pr-open` job, then print a one-line-per-job summary of the board and stop.
 
 ## Paths
 `ROOT` = the main checkout (absolute). `SLUG` = `ROOT` with every character that is not a letter or digit replaced by `-` (the naming Claude Code uses under `~/.claude/projects/`). `FACTORY` = `~/.claude/factory/<SLUG>` (expand `~`; create it if missing). `MAIN` = the main branch from "Branch and push" in `FACTORY/project.md`. `JOB` = `FACTORY/jobs/<job-id>`. `TREE` = `FACTORY/worktrees/<job-id>`. `PLAYBOOK` = `${CLAUDE_PLUGIN_ROOT}/skills/factory/playbooks/<playbook>.md`, from the job's `playbook` on the board (`feature` for a job that has none). All factory state lives in `FACTORY`, none in the repo. Always pass absolute paths to agents, and start every agent prompt with `FACTORY`.
@@ -96,15 +96,16 @@ reviews  { security, ux, code }   current round: pending | PASS | CHANGES | skip
 past     [ { security, ux, code } ]   verdicts of earlier rounds, oldest first
 decision null | APPROVE | ESCALATE
 server   null | http://localhost:<port>   review server started by `run`
+pr       null | <PR url>   set by Open PR
 ```
-`stage` is one of: `spec`, `build`, `review`, `approve`, `needs-human`, `merged`, `rejected`. `playbook` is `feature`, `bug-fix` or `refactor`, null until the spec is approved. `builder` is the current round's builder name or agent id (see below). `note` is a short human-readable status or the escalation reason. The no-argument summary shows `server` when it is set. Every time a job enters `needs-human`, from any step, do "Hand to human" before writing the board.
+`stage` is one of: `spec`, `build`, `review`, `approve`, `needs-human`, `pr-open`, `merged`, `rejected`. `playbook` is `feature`, `bug-fix` or `refactor`, null until the spec is approved. `builder` is the current round's builder name or agent id (see below). `note` is a short human-readable status or the escalation reason. The no-argument summary shows `server` when it is set. Every time a job enters `needs-human`, from any step, do "Hand to human" before writing the board.
 
 ## Init
 For a repo that has the agents and this skill but no `FACTORY/project.md`.
 1. If `FACTORY/project.md` exists, show it and ask whether to revise it. If it has no "Sources" section, or the user wants to change sources, run Sources (step 5) on its own and write only that section; then stop.
 2. Survey the repo, reading only what each section needs: `CLAUDE.md`, `AGENTS.md`, `README`; the dependency manifests and lock files (they name the package manager); CI workflows (the real check commands); test config and where tests live; schema or migration folders; UI folders, design tokens and shared components; deploy config; `git remote -v` and the default branch (`git symbolic-ref --short refs/remotes/origin/HEAD`, else the current branch). Env files: list their names only, never read them.
-3. Draft `FACTORY/project.md` from `${CLAUDE_PLUGIN_ROOT}/skills/factory/project-template.md`: fill every section, write "none" where it does not apply, mark anything inferred but unconfirmed with "(check)". Ask the user only what the repo cannot tell you: usually the primary user, the product stance, and whether a push to MAIN deploys.
-4. Toolchain. Make sure the draft's "Toolchain" section lists `git`, every tool the Checks and App sections use, and `playwright-cli` if the app has a UI. Run the Preflight (below) with starting allowed. Report each tool as ok, started, or missing. For a missing tool, give the install command and ask before running it.
+3. Draft `FACTORY/project.md` from `${CLAUDE_PLUGIN_ROOT}/skills/factory/project-template.md`: fill every section, write "none" where it does not apply, mark anything inferred but unconfirmed with "(check)". Ask the user only what the repo cannot tell you: usually the primary user, the product stance, whether a push to MAIN deploys, and the delivery: `merge` (merge into MAIN locally) or `pr` (push `factory/<job-id>` and open a PR the user merges on GitHub; needs remote `origin` on GitHub).
+4. Toolchain. Make sure the draft's "Toolchain" section lists `git`, every tool the Checks and App sections use, `playwright-cli` if the app has a UI, and `gh | gh auth status | none | opening PRs` if Delivery is `pr`. Run the Preflight (below) with starting allowed. Report each tool as ok, started, or missing. For a missing tool, give the install command and ask before running it. If Delivery is `pr`, propose these rules for `~/.claude/settings.json` (MAIN filled in): `permissions.allow` `Bash(git push origin factory/*)`, `Bash(gh pr create:*)`, `Bash(gh pr view:*)`; `permissions.deny` `Bash(git push --force:*)`, `Bash(git push -f:*)`, `Bash(git push origin MAIN:*)`, `Bash(gh pr merge:*)`. Write them only after the user says yes; never remove existing entries.
 5. Sources. Ask whether other sources hold context for this project beyond the repo: a notes folder (Obsidian), chat (Slack), tickets (Jira), a wiki (Confluence). Each one gets a source scout per job. Say they are optional and read-only. For each source the user names:
    - folder: check it exists. Propose adding it to `permissions.additionalDirectories` in `~/.claude/settings.json` (background scouts cannot ask for permission, so unlisted folders are denied).
    - MCP server: check it is connected (`claude mcp list`). If not, tell the user to add it with `claude mcp add --transport http <name> --scope user <url from the vendor's docs>` and sign in with `/mcp`, then continue. List the server's tools and propose `permissions.allow` rules for its search, list and read tools only, plus `permissions.deny` rules for any tool that creates, updates, deletes, posts or sends. Tools left unallowed are denied to background scouts.
@@ -149,11 +150,11 @@ Reply: go | a change | a question
 3. The spec is complete when it has no open questions and the user says go. If they say go while questions are open, use the recommended answers, revise once, and show the highlights for a final go. Board: `note` = "spec rev <n> approved", `playbook` = the name on the spec's `Playbook:` line.
 
 ## New job
-1. Id: next free number (3 digits) + kebab slug of at most 4 words, e.g. `004-bulk-paste`. Make `JOB`. Add the board entry: stage `spec`, round 0, maxRound 2, hold true/false, reviews all `pending`, past `[]`.
+1. Id: next free number (3 digits) + kebab slug of at most 4 words, e.g. `004-bulk-paste`. Make `JOB`. Add the board entry: stage `spec`, round 0, maxRound 2, hold true/false, reviews all `pending`, past `[]`, pr null.
 2. **Idea.** Write the idea text, verbatim, to `JOB/idea.md` under `# <title>`. No chat: questions and scope are settled in Spec review.
 3. **Scout and spec.** Run Scout (below), then spawn `factory:factory-spec-writer` named `spec-<job-id>` with `JOB/idea.md`, the scout files, the playbooks folder `${CLAUDE_PLUGIN_ROOT}/skills/factory/playbooks/`, and output `JOB/spec.md`. Check the file exists and has an acceptance criteria section; if not, respawn once, then stop and tell the user. Then run Spec review (above). Continue only after the user approves the spec.
 4. **Preflight.** Run the Preflight (below) with starting allowed. If a tool is still missing, tell the user which checks it blocks and ask: continue without it or stop. If they continue, put the list in the builder's prompt as "Unavailable: <tools>; do not attempt those checks, list them under Not verified", and in the board `note`. Stage stays `spec`.
-5. **Worktree.** From `ROOT` (must be on MAIN): `git worktree add TREE -b factory/<job-id> MAIN`, then copy every env file from the main checkout into the same place in the worktree: `cd ROOT && find . -name '.env*' -not -path './.git/*' -not -path '*/node_modules/*' -exec rsync -R {} TREE/ \;` (copy only; never read, print or edit them; they are git-ignored). If none is found and the app needs one, tell the user that browser checks may not work. Stage `build`.
+5. **Worktree.** If Delivery is `pr`, bring MAIN up to date first (PRs are merged on GitHub): from `ROOT` on MAIN, `git fetch origin MAIN`, then `git merge --ff-only origin/MAIN`; if either fails, tell the user why and stop. From `ROOT` (must be on MAIN): `git worktree add TREE -b factory/<job-id> MAIN`, then copy every env file from the main checkout into the same place in the worktree: `cd ROOT && find . -name '.env*' -not -path './.git/*' -not -path '*/node_modules/*' -exec rsync -R {} TREE/ \;` (copy only; never read, print or edit them; they are git-ignored). If none is found and the app needs one, tell the user that browser checks may not work. Stage `build`.
 6. **Build.** Spawn `factory:factory-builder` named `builder-<job-id>-r1` (use the Agent tool's name option if it has one) with: `JOB`, `TREE`, branch, `PLAYBOOK`, "write `JOB/build.md`". Store the name, or the agent id the result returns, in `builder`. Wait for it. Check `build.md` exists and the branch has commits (`git -C TREE log MAIN..HEAD --oneline`).
 7. **Review round** (below), starting at round 1.
 
@@ -183,8 +184,24 @@ Stage `build`. Spawn a new `factory:factory-builder` for every round, named `bui
 
 ## Approve
 Spawn `factory:factory-approver` with `JOB`, `TREE`, branch, `PLAYBOOK`, outputs `JOB/decision.md` and `JOB/test.md`. Read the first line.
-- `APPROVE`: decision `APPROVE`. If `hold` is true: stage `needs-human`, `note` = "approved, held for manual testing"; keep worktree and branch, do not merge. Otherwise go to Merge.
+- `APPROVE`: decision `APPROVE`. If `hold` is true: stage `needs-human`, `note` = "approved, held for manual testing"; keep worktree and branch, do not merge. Otherwise go to Deliver.
 - `ESCALATE`: decision `ESCALATE`, stage `needs-human`, `note` = the first reasoning line.
+
+## Deliver
+Read `Delivery` in "Branch and push" of `FACTORY/project.md` (`merge` if it is missing). `merge`: go to Merge. `pr`: go to Open PR.
+
+## Open PR
+For `Delivery: pr`. The user merges the PR on GitHub; the factory never merges into or pushes MAIN in this mode.
+1. Write `JOB/pr.md` from the job files: `## Goal` (from `spec.md`), `## Acceptance criteria` (the spec's list), `## Review` (the reasoning in `decision.md`), `## How to test` (the steps in `test.md`, if it exists), `## Not verified` (from `build.md`, if any). No Claude attribution, per the user's rules.
+2. If `needs-human/<job-id>` exists, do "Take back human branch" (it carries the user's commits). If it stops, stage `needs-human`, `note` = why, and stop.
+3. From `ROOT`: `git push origin factory/<job-id>`, in exactly that form. On failure: stage `needs-human`, `note` = "PR not opened: <why>"; do not retry with force.
+4. If `pr` is set and `gh pr view <pr> --json state -q .state` prints `OPEN`, the push has updated that PR. Otherwise, from `ROOT`: `gh pr create --base MAIN --head factory/<job-id> --title "<title>" --body-file JOB/pr.md` and set `pr` to the URL it prints. On failure: stage `needs-human`, `note` = "branch pushed, PR not opened: <why>".
+5. Stage `pr-open`, `note` = "PR open: <pr>". Keep TREE and `factory/<job-id>` so `rework` can continue on them. Write the board, then do Follow-ups.
+
+## PR check
+For each `pr-open` job: from `ROOT`, `gh pr view <pr> --json state,headRefOid`. If it fails, show why in the summary and leave the job as it is.
+- `OPEN`: nothing.
+- `MERGED` or `CLOSED`: `git worktree remove TREE` (never `--force`; if it refuses, keep it and put why in `note`). If `git rev-parse factory/<job-id>` equals `headRefOid`, `git branch -D factory/<job-id>` (the PR holds those commits; `-d` refuses after a squash merge); otherwise keep the branch and put why in `note`. Then stage `merged`, `note` = "PR merged", or stage `rejected`, `note` = "PR closed without merge". Write the board, then do Learn.
 
 ## Merge
 `SRC` = `needs-human/<job-id>` if that branch exists (it may hold the user's own commits), else `factory/<job-id>`. If `ROOT` is not on MAIN (for example the user still has `needs-human/<job-id>` checked out), stop and ask the user to switch to MAIN; never switch for them. From `ROOT` on MAIN: `git merge --no-ff SRC -m "Merge factory/<job-id>: <title>"`, following the user's commit attribution rules. On any conflict or refusal, `git merge --abort`, stage `needs-human`, `note` = why. On success: stage `merged`, `git worktree remove TREE`, then `git branch -d needs-human/<job-id> factory/<job-id>` for the ones that exist (safe delete; if one refuses, keep it and put why in `note`). Write the board. Then, only after a successful merge and only if "Branch and push" says to push, push MAIN and nothing else with the command given there. If the push fails, the job stays `merged`, `note` = "merged locally, push failed: <why>"; do not retry with force. Never force anything.
@@ -214,7 +231,7 @@ Before the builder resumes, bring the user's commits into the agent branch and r
 3. Confirm `git merge-base --is-ancestor needs-human/<job-id> factory/<job-id>`, then `git branch -D needs-human/<job-id>` (safe: its commits are on the agent branch). Delete `JOB/test.md`; the next escalation writes a new one.
 
 ## Follow-ups
-When a job reaches `needs-human` or `merged`, read the `Notes` of every review file in its round folders. For each note that defers work (names a later job, says "follow-up", "later", "next job"), append `- [ ] <the note, one line> (from <job-id>)` to `FACTORY/backlog.md`, skipping ones already there. List what you added in Finish.
+When a job reaches `needs-human`, `pr-open` or `merged`, read the `Notes` of every review file in its round folders. For each note that defers work (names a later job, says "follow-up", "later", "next job"), append `- [ ] <the note, one line> (from <job-id>)` to `FACTORY/backlog.md`, skipping ones already there. List what you added in Finish.
 
 ## Learn
 When a job reaches `merged` or `rejected`, after Follow-ups. If `FACTORY/learnings.md` is missing, create it with this header:
@@ -234,11 +251,11 @@ When a job reaches `merged` or `rejected`, after Follow-ups. If `FACTORY/learnin
 5. At 30 rows, move the oldest row with `enforced by` = `none` to the backlog the same way, and delete it.
 
 ## Finish
-End with at most five lines: job id, stage, rounds used, the `note` if any, and the next command the user may want. For needs-human: `/factory run <id>` (or `git switch needs-human/<id>`), then `/factory approve|rework|reject <id>`.
+End with at most five lines: job id, stage, rounds used, the `note` if any, and the next command the user may want. For needs-human: `/factory run <id>` (or `git switch needs-human/<id>`), then `/factory approve|rework|reject <id>`. For pr-open: the PR link; merge or close it on GitHub, then `/factory` cleans up; `/factory rework <id> <note>` to change it.
 
 ## Rules
 - The factory is for code changes only. If the request is for mockups or screenshots of a design, do not start a job: tell the user to make them outside the factory.
-- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the verifier writes only `verified.md`; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `scope.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `server.pid` and `server.log`, `backlog.md` (in `next`, Follow-ups and Learn), `learnings.md` (in Learn), the files `init` creates, and, after the user says yes in `init`, the source permission entries in `~/.claude/settings.json`.
+- One job at a time per orchestrator. You are the only writer of `board.json`; reviewers, spec-writer and approver write only their own file; the verifier writes only `verified.md`; the builder writes code in TREE and `build.md`. Scouts write nothing. The only other files you write are the scouts' replies as `scout-*.md`, `idea.md`, `spec-feedback.md`, `scope.md`, `decision.md` when rounds run out, `test.md` when the approver did not write one, `rework.md`, `pr.md`, `server.pid` and `server.log`, `backlog.md` (in `next`, Follow-ups and Learn), `learnings.md` (in Learn), the files `init` creates, and, after the user says yes in `init`, the source and PR permission entries in `~/.claude/settings.json`.
 - Never read, print, edit or commit env files or credentials. The only allowed action is the plain copy of env files into the worktree in New job step 4.
-- The only push allowed is the MAIN push in Merge, after a successful merge. Never push a `factory/*` or `needs-human/*` branch, never use `--force`, `--all`, `--tags` or `-u` with another ref, and never push from any other step or agent.
+- Pushes allowed: with `Delivery: merge`, the MAIN push in Merge after a successful merge; with `Delivery: pr`, `git push origin factory/<job-id>` in Open PR, and never MAIN. Never push a `needs-human/*` branch, never use `--force`, `--all`, `--tags` or `-u`, and never push from any other step or agent. Never merge, close or approve a PR; the user does that on GitHub.
 - Report what happened, including failures and anything agents said they did not verify.
